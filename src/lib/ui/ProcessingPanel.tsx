@@ -103,8 +103,7 @@ function PhaseRow({
 }
 
 export function ProcessingPanel({ stats, backendLabel }: Props) {
-  // Treat both 'idle' and 'init' (worker ready) as idle states
-  const isIdle = stats.phase === 'idle' || stats.phase === 'init';
+  const isIdle = stats.phase === 'idle';
   const isComplete = stats.phase === 'complete';
   const isActive = !isIdle && !isComplete && stats.phase !== 'error';
   const hasError = stats.phase === 'error' || !!stats.error;
