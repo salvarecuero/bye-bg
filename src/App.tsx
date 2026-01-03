@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
+import { useDropzone } from 'react-dropzone';
 import { Dropzone } from './lib/ui/Dropzone';
 import { CompareSlider } from './lib/ui/CompareSlider';
 import { SettingsPanel } from './lib/ui/SettingsPanel';
@@ -13,7 +14,7 @@ import { downloadBatchItem, downloadAllSeparate, downloadAsZip } from './lib/dow
 import { copyImageToClipboard, isClipboardSupported } from './lib/clipboard';
 import type { ProcessingStats, ProcessingPhase } from './types/processing';
 import clsx from 'clsx';
-import { FiZap, FiCpu } from 'react-icons/fi';
+import { FiZap, FiCpu, FiUploadCloud } from 'react-icons/fi';
 
 type WorkerMessage =
   | {
@@ -394,6 +395,16 @@ export default function App() {
     true
   );
 
+  // Full-screen drop zone
+  const { getRootProps, isDragActive } = useDropzone({
+    onDrop: handleFiles,
+    multiple: true,
+    accept: { 'image/*': [] },
+    noClick: true,
+    noKeyboard: true,
+    disabled: processing
+  });
+
   const statusLabel = useMemo(() => {
     if (processing) return processingStats.message || 'Processing…';
     if (outputUrl) return 'Done';
@@ -403,9 +414,36 @@ export default function App() {
   const isAnyProcessing = processing || batchProcessor.isProcessing;
 
   return (
-    <div className="min-h-screen bg-[#0b1221] px-4 py-6 md:py-8 md:px-10">
-      {/* Screen reader announcer */}
-      <div id="sr-announcer" role="status" aria-live="polite" aria-atomic="true" className="sr-only" />
+    <div {...getRootProps()} className="min-h-screen bg-[#0b1221] flex flex-col relative">
+      {/* Full-screen drop overlay */}
+      <div
+        className={clsx(
+          'fixed inset-0 z-40 flex items-center justify-center pointer-events-none',
+          'transition-all duration-200',
+          isDragActive ? 'opacity-100' : 'opacity-0'
+        )}
+      >
+        <div
+          className={clsx(
+            'absolute inset-4 rounded-3xl border-2 border-dashed',
+            'bg-black/60 backdrop-blur-md',
+            'flex flex-col items-center justify-center gap-4',
+            isDragActive ? 'border-accent shadow-glow' : 'border-transparent'
+          )}
+        >
+          <div className="rounded-full bg-accent/20 p-6">
+            <FiUploadCloud className="h-16 w-16 text-accent" />
+          </div>
+          <div className="text-center">
+            <div className="text-2xl font-semibold text-white">Drop images here</div>
+            <div className="mt-1 text-sm text-slate-400">Release to remove backgrounds</div>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex-1 px-4 py-6 md:py-8 md:px-10">
+        {/* Screen reader announcer */}
+        <div id="sr-announcer" role="status" aria-live="polite" aria-atomic="true" className="sr-only" />
 
       {/* Hidden file input for keyboard shortcut */}
       <input
@@ -561,10 +599,26 @@ export default function App() {
             </div>
           )}
         </div>
+        </div>
+
+        {/* Shortcuts Help Panel */}
+        <ShortcutsPanel isOpen={showShortcuts} onClose={() => setShowShortcuts(false)} />
       </div>
 
-      {/* Shortcuts Help Panel */}
-      <ShortcutsPanel isOpen={showShortcuts} onClose={() => setShowShortcuts(false)} />
+      {/* Credits Footer */}
+      <footer className="py-4 text-center text-xs text-slate-500 border-t border-slate-700/30">
+        Created with{' '}
+        <span className="text-red-400">❤️</span>
+        {' '}by{' '}
+        <a
+          href="https://salvarecuero.dev/"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-accent hover:text-accentHover transition-colors"
+        >
+          @salvarecuero
+        </a>
+      </footer>
     </div>
   );
 }
