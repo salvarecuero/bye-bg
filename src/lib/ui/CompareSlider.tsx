@@ -5,9 +5,10 @@ type Props = {
   beforeUrl?: string;
   afterUrl?: string;
   label?: string;
+  processing?: boolean;
 };
 
-export function CompareSlider({ beforeUrl, afterUrl, label }: Props) {
+export function CompareSlider({ beforeUrl, afterUrl, label, processing }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [percent, setPercent] = useState(50);
 
@@ -33,29 +34,42 @@ export function CompareSlider({ beforeUrl, afterUrl, label }: Props) {
       ref={containerRef}
       className="relative h-full w-full overflow-hidden rounded-3xl glass checkerboard select-none touch-none"
     >
+      {/* Before image (original) - visible on LEFT */}
       {beforeUrl && (
         <img
           src={beforeUrl}
           className="absolute inset-0 z-0 h-full w-full object-contain"
           style={{
-            WebkitMaskImage: `linear-gradient(to right, transparent ${percent}%, black ${percent}%)`,
-            maskImage: `linear-gradient(to right, transparent ${percent}%, black ${percent}%)`
+            WebkitMaskImage: `linear-gradient(to right, black ${percent}%, transparent ${percent}%)`,
+            maskImage: `linear-gradient(to right, black ${percent}%, transparent ${percent}%)`
           }}
           alt="Before"
           draggable={false}
         />
       )}
 
+      {/* After image (processed) - visible on RIGHT */}
       {afterUrl && (
         <img
           src={afterUrl}
           className="absolute inset-0 z-10 h-full w-full object-contain"
           style={{
-            WebkitMaskImage: `linear-gradient(to right, black ${percent}%, transparent ${percent}%)`,
-            maskImage: `linear-gradient(to right, black ${percent}%, transparent ${percent}%)`
+            WebkitMaskImage: `linear-gradient(to right, transparent ${percent}%, black ${percent}%)`,
+            maskImage: `linear-gradient(to right, transparent ${percent}%, black ${percent}%)`
           }}
           alt="After"
           draggable={false}
+        />
+      )}
+
+      {/* Loading stripes on RIGHT side (where processed result will appear) */}
+      {beforeUrl && processing && !afterUrl && (
+        <div
+          className="absolute inset-0 z-[15] animate-loading-stripes pointer-events-none"
+          style={{
+            WebkitMaskImage: `linear-gradient(to right, transparent ${percent}%, black ${percent}%)`,
+            maskImage: `linear-gradient(to right, transparent ${percent}%, black ${percent}%)`
+          }}
         />
       )}
 

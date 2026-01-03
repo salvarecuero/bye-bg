@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import clsx from 'clsx';
 import { FiDownloadCloud, FiCpu, FiLayers, FiCheck, FiAlertTriangle, FiChevronDown, FiChevronUp } from 'react-icons/fi';
 import type { ProcessingStats, ProcessingPhase, PhaseStatus } from '../../types/processing';
@@ -61,7 +61,7 @@ function PhaseRow({
         ) : status === 'active' ? (
           <div className="h-2 w-2 animate-pulse rounded-full bg-accent" />
         ) : (
-          <div className="h-1.5 w-1.5 rounded-full bg-slate-500" />
+          <div className="h-1.5 w-1.5 rounded-full bg-slate-400" />
         )}
       </div>
 
@@ -71,7 +71,7 @@ function PhaseRow({
             'text-sm transition-colors',
             status === 'active' && 'text-white font-medium',
             status === 'complete' && 'text-slate-300',
-            status === 'pending' && 'text-slate-500',
+            status === 'pending' && 'text-slate-400',
             status === 'error' && 'text-red-400'
           )}
         >
@@ -103,11 +103,20 @@ function PhaseRow({
 }
 
 export function ProcessingPanel({ stats, backendLabel }: Props) {
-  const [expanded, setExpanded] = useState(true);
-  const isIdle = stats.phase === 'idle';
+  // Treat both 'idle' and 'init' (worker ready) as idle states
+  const isIdle = stats.phase === 'idle' || stats.phase === 'init';
   const isComplete = stats.phase === 'complete';
   const isActive = !isIdle && !isComplete && stats.phase !== 'error';
   const hasError = stats.phase === 'error' || !!stats.error;
+
+  const [expanded, setExpanded] = useState(false);
+
+  // Auto-expand when processing starts
+  useEffect(() => {
+    if (isActive) {
+      setExpanded(true);
+    }
+  }, [isActive]);
 
   return (
     <div

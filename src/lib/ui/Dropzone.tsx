@@ -41,7 +41,7 @@ export function Dropzone({ onFile, onFiles, multiple = false, disabled, compact 
         'glass border-dashed border-2 border-slate-700 rounded-2xl',
         'flex items-center justify-center text-slate-300 cursor-pointer',
         'transition-all duration-200 hover:border-accent hover:text-white hover:shadow-glow-sm',
-        compact ? 'p-4' : 'p-6',
+        compact ? 'p-4' : 'p-4 md:p-5',
         disabled && 'opacity-60 cursor-not-allowed hover:shadow-none',
         isDragActive && 'border-accent text-white bg-accent/5 shadow-glow'
       )}

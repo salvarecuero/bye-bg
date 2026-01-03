@@ -403,7 +403,7 @@ export default function App() {
   const isAnyProcessing = processing || batchProcessor.isProcessing;
 
   return (
-    <div className="min-h-screen bg-[#0b1221] px-4 py-8 md:p-10">
+    <div className="min-h-screen bg-[#0b1221] px-4 py-6 md:py-8 md:px-10">
       {/* Screen reader announcer */}
       <div id="sr-announcer" role="status" aria-live="polite" aria-atomic="true" className="sr-only" />
 
@@ -423,7 +423,7 @@ export default function App() {
         }}
       />
 
-      <div className="mx-auto grid max-w-6xl gap-6 md:grid-cols-[2fr,1fr]">
+      <div className="mx-auto grid max-w-6xl gap-4 md:gap-5 md:grid-cols-[2fr,1fr]">
         <div className="space-y-4">
           {/* Show Dropzone or BatchQueue based on mode */}
           {batchMode ? (
@@ -503,8 +503,8 @@ export default function App() {
                   </div>
                 </div>
 
-                <div className="aspect-[4/3]">
-                  <CompareSlider beforeUrl={inputUrl} afterUrl={outputUrl} />
+                <div className="aspect-[4/3] md:aspect-[16/10]">
+                  <CompareSlider beforeUrl={inputUrl} afterUrl={outputUrl} processing={processing} />
                 </div>
 
                 <div className="mt-4">
@@ -523,7 +523,7 @@ export default function App() {
           )}
         </div>
 
-        <div className="space-y-4">
+        <div className="space-y-3">
           <SettingsPanel
             quality={quality}
             onQuality={setQuality}

@@ -135,9 +135,9 @@ export function SettingsPanel({
                 className={clsx(
                   'relative flex items-center justify-center gap-1.5 rounded-lg py-2 text-sm font-medium transition',
                   device === opt.key
-                    ? 'bg-accent text-slate-900'
+                    ? 'bg-accent text-white'
                     : isDisabled
-                      ? 'text-slate-600 cursor-not-allowed'
+                      ? 'text-slate-500 cursor-not-allowed'
                       : 'text-slate-300 hover:bg-slate-800'
                 )}
                 onClick={() => !isDisabled && onDevice(opt.key)}
@@ -155,7 +155,7 @@ export function SettingsPanel({
         </div>
       </div>
 
-      <div className="mt-6">
+      <div className="mt-4">
         <div className="flex items-center gap-1 mb-2">
           <span className="text-sm text-slate-200 font-medium">Model</span>
           <Tooltip content="Higher quality models produce better results but are larger to download." />
@@ -170,7 +170,7 @@ export function SettingsPanel({
                 className={clsx(
                   'relative flex flex-col items-center rounded-lg py-2 transition',
                   quality === q.key
-                    ? 'bg-accent text-slate-900'
+                    ? 'bg-accent text-white'
                     : 'text-slate-200 hover:bg-slate-800'
                 )}
                 onClick={() => onQuality(q.key)}
@@ -184,7 +184,7 @@ export function SettingsPanel({
                 </span>
                 <span className={clsx(
                   'text-[10px]',
-                  quality === q.key ? 'text-slate-700' : 'text-slate-400'
+                  quality === q.key ? 'text-white/70' : 'text-slate-500'
                 )}>
                   {q.size}
                 </span>
@@ -224,7 +224,7 @@ export function SettingsPanel({
         </Switch>
       </div>
 
-      <div className="mt-6 space-y-3">
+      <div className="mt-4 space-y-3">
         <div className="text-sm text-slate-200 font-medium">Background</div>
         <div className="grid grid-cols-3 gap-3">
           {[
@@ -236,7 +236,7 @@ export function SettingsPanel({
               key={opt.key}
               onClick={() => onBgMode(opt.key as BackgroundMode)}
               className={clsx(
-                'rounded-xl border px-3 py-3 text-sm font-medium transition',
+                'rounded-xl border px-3 py-2.5 text-sm font-medium transition',
                 bgMode === opt.key
                   ? 'border-accent bg-accent/10 text-white'
                   : 'border-slate-600 text-slate-200 hover:border-slate-400 hover:text-white'
@@ -263,14 +263,14 @@ export function SettingsPanel({
         )}
       </div>
 
-      <div className="mt-6">
+      <div className="mt-4">
         <div className="text-sm text-slate-200 font-medium mb-2">Export</div>
         <div className="flex gap-3">
           {(['png', 'webp'] as ExportFormat[]).map((fmt) => (
             <button
               key={fmt}
               className={clsx(
-                'flex-1 rounded-xl border px-3 py-3 text-sm font-semibold transition',
+                'flex-1 rounded-xl border px-3 py-2.5 text-sm font-semibold transition',
                 exportFormat === fmt
                   ? 'border-accent bg-accent/10 text-white'
                   : 'border-slate-600 text-slate-200 hover:border-slate-400 hover:text-white'

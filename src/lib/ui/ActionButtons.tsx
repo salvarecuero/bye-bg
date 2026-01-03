@@ -58,13 +58,13 @@ export function ActionButtons({
           className={clsx(
             'flex items-center gap-2 rounded-2xl px-5 py-3 text-sm font-bold transition-all duration-200 btn-scale',
             outputUrl && !processing
-              ? 'bg-gradient-to-r from-accent to-cyan-400 text-slate-900 shadow-glow hover:shadow-[0_0_30px_rgba(14,165,233,0.5)] hover:scale-[1.02]'
+              ? 'bg-emerald-500 text-white shadow-[0_0_20px_rgba(34,197,94,0.3)] hover:bg-emerald-400 hover:shadow-[0_0_30px_rgba(34,197,94,0.4)]'
               : 'bg-slate-800 text-slate-500 cursor-not-allowed shadow-none'
           )}
         >
           <FiDownloadCloud className="h-5 w-5" />
           <span>Download {exportFormat.toUpperCase()}</span>
-          <kbd className="ml-1 rounded bg-slate-900/30 px-1.5 py-0.5 text-[11px] font-mono text-slate-800/80 border border-slate-900/20">
+          <kbd className="ml-1 rounded bg-white/30 px-1.5 py-0.5 text-[11px] font-mono text-white border border-white/30">
             {modKey}S
           </kbd>
         </button>
@@ -78,7 +78,7 @@ export function ActionButtons({
             className={clsx(
               'flex items-center justify-center rounded-xl p-2.5 transition-all duration-200',
               outputUrl && !processing
-                ? 'border border-accent text-accent hover:bg-accent/10'
+                ? 'border border-slate-500 text-slate-300 hover:border-slate-400 hover:text-white hover:bg-white/5'
                 : 'border border-slate-700 text-slate-500 cursor-not-allowed',
               copySuccess && 'copy-success bg-emerald-500/20 border-emerald-500 text-emerald-400'
             )}
@@ -124,7 +124,7 @@ export function ActionButtons({
             'flex items-center gap-2 rounded-xl px-3 py-2 text-sm transition-all duration-200',
             processing
               ? 'text-slate-600 cursor-not-allowed'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+              : 'text-red-400/80 hover:text-red-400 hover:bg-red-500/10'
           )}
         >
           <FiRotateCw className="h-4 w-4" />

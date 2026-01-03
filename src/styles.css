@@ -143,6 +143,23 @@ body {
   animation: phase-pulse 1.5s ease-in-out infinite;
 }
 
+/* Loading stripes animation for processing state */
+@keyframes loading-stripes {
+  0% { background-position: 0 0; }
+  100% { background-position: 28px 0; }
+}
+
+.animate-loading-stripes {
+  background: repeating-linear-gradient(
+    -45deg,
+    transparent,
+    transparent 10px,
+    rgba(14, 165, 233, 0.08) 10px,
+    rgba(14, 165, 233, 0.08) 20px
+  );
+  animation: loading-stripes 0.8s linear infinite;
+}
+
 /* Scrollbar styling */
 ::-webkit-scrollbar {
   width: 6px;
