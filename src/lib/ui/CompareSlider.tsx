@@ -67,6 +67,18 @@ export function CompareSlider({ beforeUrl, afterUrl, label }: Props) {
         </div>
       )}
 
+      {/* Before/After labels */}
+      {(beforeUrl || afterUrl) && (
+        <>
+          <span className="absolute left-3 top-3 z-40 rounded-lg bg-black/40 px-2 py-1 text-[10px] font-medium uppercase tracking-wider text-white/80 border border-white/10 backdrop-blur-sm">
+            Before
+          </span>
+          <span className="absolute right-3 top-3 z-40 rounded-lg bg-black/40 px-2 py-1 text-[10px] font-medium uppercase tracking-wider text-white/80 border border-white/10 backdrop-blur-sm">
+            After
+          </span>
+        </>
+      )}
+
       <div
         className="absolute inset-0"
         style={{

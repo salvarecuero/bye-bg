@@ -19,6 +19,7 @@ type ProcessMessage = {
       bgColor: string;
       bgImageBytes?: number[];
       exportFormat: 'png' | 'webp';
+      device?: 'auto' | 'gpu' | 'cpu';
     };
   };
 };
@@ -54,29 +55,56 @@ self.onmessage = async (event: MessageEvent<Message>) => {
 
   const t0 = performance.now();
   const processId = id;
+
+  // Phase timing tracking
+  const timings: { download?: number; inference?: number; composite?: number } = {};
+  let phaseStart = t0;
+  let currentPhase = 'download';
+
   try {
     const bytes = new Uint8Array(event.data.payload.image.bytes);
     const blob = new Blob([bytes], { type: event.data.payload.image.mime });
 
+    // Read tier from process message options (not lastTier from init)
+    const tier = event.data.payload.options.tier;
+    const device = event.data.payload.options.device || 'auto';
+    const model: 'isnet' | 'isnet_fp16' | 'isnet_quint8' =
+      tier === 'pro'
+        ? 'isnet_fp16'
+        : tier === 'fast'
+          ? 'isnet_quint8'
+          : 'isnet';
+
     postMessage({
       id: processId,
       type: 'progress',
-      payload: { phase: 'download', message: 'Preparing…' }
+      payload: { phase: 'download', message: 'Preparing…', modelName: model }
     });
 
-    const model: 'isnet' | 'isnet_fp16' | 'isnet_quint8' =
-      lastTier === 'pro'
-        ? 'isnet_fp16'
-        : lastTier === 'fast'
-          ? 'isnet_quint8'
-          : 'isnet';
+    // Map device preference to library config
+    // @imgly/background-removal uses 'gpu' | 'cpu' | undefined (auto)
+    const deviceConfig = device === 'auto' ? undefined : device;
 
     let lastProgress = 0;
     const resultBlob = await removeBackground(blob, {
       model,
+      device: deviceConfig,
       output: { format: 'image/png' },
       progress: (phase: string, loaded: number, total: number) => {
         const pct = total > 0 ? (loaded / total) * 100 : 0;
+
+        // Track phase transitions for timing
+        if (phase !== currentPhase) {
+          const now = performance.now();
+          if (currentPhase === 'download') {
+            timings.download = Math.round(now - phaseStart);
+          } else if (currentPhase === 'compute') {
+            timings.inference = Math.round(now - phaseStart);
+          }
+          phaseStart = now;
+          currentPhase = phase;
+        }
+
         if (Math.abs(pct - lastProgress) > 2 || phase !== 'download') {
           lastProgress = pct;
           postMessage({
@@ -91,17 +119,25 @@ self.onmessage = async (event: MessageEvent<Message>) => {
                     ? 'Processing image…'
                     : 'Processing…',
               loaded,
-              total
+              total,
+              modelName: model,
+              timings: { ...timings }
             }
           });
         }
       }
     });
 
+    // Track compute phase end if still in compute
+    if (currentPhase === 'compute') {
+      timings.inference = Math.round(performance.now() - phaseStart);
+      phaseStart = performance.now();
+    }
+
     postMessage({
       id: processId,
       type: 'progress',
-      payload: { phase: 'composite', message: 'Compositing…' }
+      payload: { phase: 'composite', message: 'Compositing…', modelName: model, timings: { ...timings } }
     });
 
     const bitmap = await createImageBitmap(resultBlob);
@@ -131,7 +167,9 @@ self.onmessage = async (event: MessageEvent<Message>) => {
     const processed = await exportBlob.arrayBuffer();
     const pngBytes = new Uint8Array(processed);
 
-    const timingMs = Math.round(performance.now() - t0);
+    // Track composite time
+    timings.composite = Math.round(performance.now() - phaseStart);
+    const totalMs = Math.round(performance.now() - t0);
 
     postMessage({
       id: processId,
@@ -140,7 +178,9 @@ self.onmessage = async (event: MessageEvent<Message>) => {
         rgbaPngBytes: Array.from(pngBytes),
         width: canvas.width,
         height: canvas.height,
-        timingMs
+        timingMs: totalMs,
+        modelName: model,
+        timings: { ...timings, total: totalMs }
       }
     });
   } catch (err) {

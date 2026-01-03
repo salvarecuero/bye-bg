@@ -65,3 +65,100 @@ body {
   @apply outline-none ring-2 ring-accent ring-offset-2 ring-offset-slate-900;
 }
 
+/* Screen reader only - for accessibility */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+/* Color picker styling */
+.color-picker-wrapper .react-colorful {
+  width: 100% !important;
+  border-radius: 0.75rem;
+  overflow: hidden;
+}
+
+.color-picker-wrapper .react-colorful__saturation {
+  border-radius: 0.5rem 0.5rem 0 0;
+}
+
+.color-picker-wrapper .react-colorful__hue {
+  height: 14px;
+  border-radius: 0 0 0.5rem 0.5rem;
+}
+
+.color-picker-wrapper .react-colorful__saturation-pointer,
+.color-picker-wrapper .react-colorful__hue-pointer {
+  width: 20px;
+  height: 20px;
+  border: 3px solid #fff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+/* Copy success animation */
+@keyframes copy-success {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+}
+
+.copy-success {
+  animation: copy-success 0.3s ease-out;
+}
+
+/* Batch queue item animations */
+@keyframes slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+.batch-item-enter {
+  animation: slide-in 0.2s ease-out;
+}
+
+/* Processing phase pulse */
+@keyframes phase-pulse {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+
+.phase-pulse {
+  animation: phase-pulse 1.5s ease-in-out infinite;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.2);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.4);
+}
+

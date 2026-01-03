@@ -1,12 +1,14 @@
 import clsx from 'clsx';
-import { Fragment } from 'react';
-import { Listbox, Switch } from '@headlessui/react';
-import { FiAlertTriangle } from 'react-icons/fi';
+import { Switch } from '@headlessui/react';
+import { FiAlertTriangle, FiInfo, FiCpu, FiZap } from 'react-icons/fi';
+import { ColorPicker } from './ColorPicker';
+import { Tooltip } from './Tooltip';
 
 type Quality = 'fast' | 'quality' | 'pro';
 type ExportFormat = 'png' | 'webp';
 type BackgroundMode = 'transparent' | 'color' | 'image';
 type ModelStatus = 'loading' | 'ready' | 'error';
+type DevicePreference = 'auto' | 'gpu' | 'cpu';
 
 type Capabilities = {
   webgpu: boolean;
@@ -30,12 +32,26 @@ type Props = {
   backendLabel: string;
   modelStatus: ModelStatus;
   capabilities: Capabilities;
+  device: DevicePreference;
+  onDevice: (v: DevicePreference) => void;
 };
 
-const qualities: { key: Quality; label: string }[] = [
-  { key: 'fast', label: 'Fast' },
-  { key: 'quality', label: 'Quality' },
-  { key: 'pro', label: 'Pro' }
+const qualities: { key: Quality; label: string; size: string; description: string }[] = [
+  { key: 'fast', label: 'Fast', size: '~5MB', description: 'Lightweight quantized model. Quick results, slightly lower edge quality.' },
+  { key: 'quality', label: 'Balanced', size: '~40MB', description: 'Balanced model for most images. Good quality with reasonable speed.' },
+  { key: 'pro', label: 'Pro', size: '~180MB', description: 'High-precision model. Best for complex images with fine details like hair.' }
+];
+
+const backendDescriptions: Record<string, string> = {
+  'WebGPU FP16': 'Uses your GPU with half-precision math for fastest processing. Best performance.',
+  'WebGPU FP32': 'Uses your GPU with full-precision math. Good performance, slightly more accurate.',
+  'WASM': 'Software-based CPU processing. Works everywhere but slower than GPU acceleration.'
+};
+
+const deviceOptions: { key: DevicePreference; label: string; icon: React.ReactNode }[] = [
+  { key: 'auto', label: 'Auto', icon: <FiZap className="h-3.5 w-3.5" /> },
+  { key: 'gpu', label: 'GPU', icon: <FiZap className="h-3.5 w-3.5" /> },
+  { key: 'cpu', label: 'CPU', icon: <FiCpu className="h-3.5 w-3.5" /> }
 ];
 
 export function SettingsPanel({
@@ -53,7 +69,9 @@ export function SettingsPanel({
   processing,
   backendLabel,
   modelStatus,
-  capabilities
+  capabilities,
+  device,
+  onDevice
 }: Props) {
   const getQualityWarning = (q: Quality): string | null => {
     if (q === capabilities.recommended) return null;
@@ -62,12 +80,22 @@ export function SettingsPanel({
     if (!capabilities.webgpu && q !== 'fast') return 'May be slow without WebGPU';
     return null;
   };
+  const getDeviceWarning = (d: DevicePreference): string | null => {
+    if (d === 'auto') return null;
+    if (d === 'gpu' && !capabilities.webgpu) return 'GPU not available on this device';
+    if (d === 'cpu' && capabilities.webgpu) return 'CPU is slower than GPU on this device';
+    return null;
+  };
+
   return (
     <div className="glass w-full rounded-3xl border border-white/5 p-4 shadow-panel">
       <div className="flex items-center justify-between">
         <div>
-          <div className="text-sm text-slate-300">Model</div>
-          <div className="text-sm text-white font-semibold">{backendLabel}</div>
+          <div className="text-sm text-slate-300">Engine</div>
+          <div className="flex items-center gap-1">
+            <span className="text-sm text-white font-semibold">{backendLabel}</span>
+            <Tooltip content={backendDescriptions[backendLabel] || 'AI execution engine'} />
+          </div>
         </div>
         <div className="flex items-center gap-2">
           {modelStatus === 'loading' && (
@@ -91,8 +119,47 @@ export function SettingsPanel({
         </div>
       </div>
 
+      {/* Device Selection */}
+      <div className="mt-4">
+        <div className="flex items-center gap-1 mb-2">
+          <span className="text-sm text-slate-200 font-medium">Device</span>
+          <Tooltip content="Choose which hardware to use for processing. Auto selects the best available option." />
+        </div>
+        <div className="grid grid-cols-3 gap-2 rounded-xl bg-slate-900/50 p-1">
+          {deviceOptions.map((opt) => {
+            const warning = getDeviceWarning(opt.key);
+            const isDisabled = opt.key === 'gpu' && !capabilities.webgpu;
+            return (
+              <button
+                key={opt.key}
+                className={clsx(
+                  'relative flex items-center justify-center gap-1.5 rounded-lg py-2 text-sm font-medium transition',
+                  device === opt.key
+                    ? 'bg-accent text-slate-900'
+                    : isDisabled
+                      ? 'text-slate-600 cursor-not-allowed'
+                      : 'text-slate-300 hover:bg-slate-800'
+                )}
+                onClick={() => !isDisabled && onDevice(opt.key)}
+                disabled={isDisabled}
+                title={warning || (opt.key === 'auto' ? 'Automatically selects the best option' : '')}
+              >
+                {opt.icon}
+                <span>{opt.label}</span>
+                {warning && device !== opt.key && !isDisabled && (
+                  <FiAlertTriangle className="absolute -top-1 -right-1 h-3 w-3 text-amber-400" />
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       <div className="mt-6">
-        <div className="text-sm text-slate-300 mb-2">Quality</div>
+        <div className="flex items-center gap-1 mb-2">
+          <span className="text-sm text-slate-200 font-medium">Model</span>
+          <Tooltip content="Higher quality models produce better results but are larger to download." />
+        </div>
         <div className="grid grid-cols-3 gap-2 rounded-xl bg-slate-900/50 p-1">
           {qualities.map((q) => {
             const warning = getQualityWarning(q.key);
@@ -101,19 +168,25 @@ export function SettingsPanel({
               <button
                 key={q.key}
                 className={clsx(
-                  'relative rounded-lg py-2 text-sm font-semibold transition',
+                  'relative flex flex-col items-center rounded-lg py-2 transition',
                   quality === q.key
                     ? 'bg-accent text-slate-900'
-                    : 'text-slate-300 hover:bg-slate-800'
+                    : 'text-slate-200 hover:bg-slate-800'
                 )}
                 onClick={() => onQuality(q.key)}
-                title={warning || (isRecommended ? 'Recommended for your browser' : '')}
+                title={`${q.description}${warning ? ` (${warning})` : ''}${isRecommended ? ' — Recommended' : ''}`}
               >
-                <span className="flex items-center justify-center gap-1">
+                <span className="flex items-center gap-1 text-sm font-semibold">
                   {q.label}
                   {warning && quality !== q.key && (
                     <FiAlertTriangle className="h-3 w-3 text-amber-400" />
                   )}
+                </span>
+                <span className={clsx(
+                  'text-[10px]',
+                  quality === q.key ? 'text-slate-700' : 'text-slate-400'
+                )}>
+                  {q.size}
                 </span>
                 {isRecommended && quality !== q.key && (
                   <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-emerald-500" />
@@ -126,9 +199,12 @@ export function SettingsPanel({
 
       <div className="mt-4 flex items-center justify-between">
         <div>
-          <div className="text-sm text-white font-semibold">Refine edges</div>
-          <div className="text-xs text-slate-400/80">
-            Smooths hair/fine detail band
+          <div className="flex items-center gap-1">
+            <span className="text-sm text-white font-semibold">Refine edges</span>
+            <Tooltip content="Applies edge smoothing to reduce jagged artifacts around hair and fine details. Recommended for portraits." />
+          </div>
+          <div className="text-xs text-slate-300">
+            Smooths hair/fine detail edges
           </div>
         </div>
         <Switch
@@ -149,7 +225,7 @@ export function SettingsPanel({
       </div>
 
       <div className="mt-6 space-y-3">
-        <div className="text-sm text-slate-300">Background</div>
+        <div className="text-sm text-slate-200 font-medium">Background</div>
         <div className="grid grid-cols-3 gap-3">
           {[
             { key: 'transparent', label: 'Transparent' },
@@ -160,10 +236,10 @@ export function SettingsPanel({
               key={opt.key}
               onClick={() => onBgMode(opt.key as BackgroundMode)}
               className={clsx(
-                'rounded-xl border px-3 py-3 text-sm transition',
+                'rounded-xl border px-3 py-3 text-sm font-medium transition',
                 bgMode === opt.key
                   ? 'border-accent bg-accent/10 text-white'
-                  : 'border-slate-700 text-slate-300 hover:border-slate-500'
+                  : 'border-slate-600 text-slate-200 hover:border-slate-400 hover:text-white'
               )}
             >
               {opt.label}
@@ -171,53 +247,24 @@ export function SettingsPanel({
           ))}
         </div>
 
-        <Listbox value={bgColor} onChange={onBgColor}>
-          <div className="relative mt-1">
-            <Listbox.Button className="w-full rounded-xl border border-slate-700 bg-slate-900/40 px-3 py-2 text-left text-sm text-slate-200">
-              <div className="flex items-center justify-between">
-                <span>#{bgColor.replace('#', '').toUpperCase()}</span>
-                <span
-                  className="h-6 w-10 rounded border border-slate-600"
-                  style={{ background: bgColor }}
-                />
-              </div>
-            </Listbox.Button>
-            <Listbox.Options className="absolute z-10 mt-2 w-full rounded-xl border border-slate-700 bg-slate-900/90 p-2 text-sm shadow-panel">
-              {['#0f172a', '#0ea5e9', '#1e293b', '#f8fafc', '#ec4899'].map(
-                (color) => (
-                  <Listbox.Option key={color} value={color} as={Fragment}>
-                    {({ active, selected }) => (
-                      <button
-                        className={clsx(
-                          'flex w-full items-center justify-between rounded-lg px-3 py-2',
-                          active ? 'bg-slate-800' : '',
-                          selected ? 'text-accent' : 'text-slate-200'
-                        )}
-                      >
-                        <span>{color}</span>
-                        <span
-                          className="h-6 w-10 rounded border border-slate-600"
-                          style={{ background: color }}
-                        />
-                      </button>
-                    )}
-                  </Listbox.Option>
-                )
-              )}
-            </Listbox.Options>
-          </div>
-        </Listbox>
+        {/* Show ColorPicker only when Solid color is selected */}
+        {bgMode === 'color' && (
+          <ColorPicker value={bgColor} onChange={onBgColor} />
+        )}
 
-        <button
-          onClick={onBgImageUpload}
-          className="w-full rounded-xl border border-slate-700 bg-slate-900/40 px-3 py-2 text-sm text-slate-200 transition hover:border-accent"
-        >
-          Upload background image
-        </button>
+        {/* Show upload only when Image is selected */}
+        {bgMode === 'image' && (
+          <button
+            onClick={onBgImageUpload}
+            className="w-full rounded-xl border border-slate-600 bg-slate-900/40 px-3 py-2 text-sm text-slate-200 transition hover:border-accent hover:text-white"
+          >
+            Upload background image
+          </button>
+        )}
       </div>
 
       <div className="mt-6">
-        <div className="text-sm text-slate-300 mb-2">Export</div>
+        <div className="text-sm text-slate-200 font-medium mb-2">Export</div>
         <div className="flex gap-3">
           {(['png', 'webp'] as ExportFormat[]).map((fmt) => (
             <button
@@ -226,7 +273,7 @@ export function SettingsPanel({
                 'flex-1 rounded-xl border px-3 py-3 text-sm font-semibold transition',
                 exportFormat === fmt
                   ? 'border-accent bg-accent/10 text-white'
-                  : 'border-slate-700 text-slate-300 hover:border-slate-500'
+                  : 'border-slate-600 text-slate-200 hover:border-slate-400 hover:text-white'
               )}
               onClick={() => onExportFormat(fmt)}
             >
