@@ -5,7 +5,7 @@ import { CompareSlider } from "./lib/ui/CompareSlider";
 import { SettingsPanel } from "./lib/ui/SettingsPanel";
 import { ProcessingPanel } from "./lib/ui/ProcessingPanel";
 import { ActionButtons } from "./lib/ui/ActionButtons";
-import { BatchQueue } from "./lib/ui/BatchQueue";
+import { BatchLayout } from "./lib/ui/BatchLayout";
 import { ShortcutsPanel } from "./lib/ui/ShortcutsPanel";
 import { detectWebGPU } from "./lib/capabilities";
 import { useKeyboardShortcuts } from "./lib/shortcuts";
@@ -101,6 +101,7 @@ export default function App() {
 
   // Batch mode state
   const [batchMode, setBatchMode] = useState(false);
+  const [selectedBatchItemId, setSelectedBatchItemId] = useState<string | null>(null);
   const [showShortcuts, setShowShortcuts] = useState(false);
 
   // File input ref for keyboard shortcut
@@ -403,6 +404,7 @@ export default function App() {
     if (batchMode) {
       batchProcessor.clearAll();
       setBatchMode(false);
+      setSelectedBatchItemId(null);
     }
   }, [batchMode, batchProcessor]);
 
@@ -529,14 +531,18 @@ export default function App() {
 
           {/* Main content - vertically centered */}
           <div className="flex-1 flex items-center">
-            <div className="grid w-full gap-4 md:gap-5 md:grid-cols-[2fr,1fr]">
+            <div className={clsx(
+              "grid w-full gap-4 md:gap-5 md:grid-cols-[2fr,1fr]",
+              batchMode && "items-center"
+            )}>
               <div className="space-y-4">
-            {/* Show Dropzone or BatchQueue based on mode */}
+            {/* Show Dropzone or BatchLayout based on mode */}
             {batchMode ? (
-              <BatchQueue
+              <BatchLayout
                 items={batchProcessor.items}
+                selectedItemId={selectedBatchItemId}
+                onSelectItem={setSelectedBatchItemId}
                 isProcessing={batchProcessor.isProcessing}
-                currentIndex={batchProcessor.currentIndex}
                 completedCount={batchProcessor.completedCount}
                 errorCount={batchProcessor.errorCount}
                 exportFormat={exportFmt}
@@ -545,6 +551,7 @@ export default function App() {
                 onClearAll={() => {
                   batchProcessor.clearAll();
                   setBatchMode(false);
+                  setSelectedBatchItemId(null);
                 }}
                 onStartProcessing={batchProcessor.startProcessing}
                 onStopProcessing={batchProcessor.stopProcessing}

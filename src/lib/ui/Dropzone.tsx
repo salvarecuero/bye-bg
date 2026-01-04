@@ -56,10 +56,10 @@ export function Dropzone({ onFile, onFiles, multiple = false, disabled, compact 
           )}
         />
         <div className="text-left">
-          <div className={clsx('font-semibold', compact && 'text-sm')}>
-            {multiple ? 'Drop or browse files' : 'Drop or browse'}
+          <div className={clsx('font-semibold whitespace-nowrap', compact && 'text-sm')}>
+            {compact ? 'Add more files' : multiple ? 'Drop or browse files' : 'Drop or browse'}
           </div>
-          <div className={clsx('text-slate-400', compact ? 'text-xs' : 'text-sm')}>
+          <div className={clsx('text-slate-400 whitespace-nowrap', compact ? 'text-xs' : 'text-sm')}>
             PNG, JPG, WebP — processed locally
           </div>
         </div>
