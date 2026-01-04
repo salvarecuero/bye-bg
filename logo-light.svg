@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 105 40" width="105" height="40">
+  <style>
+    .text { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-weight: 700; font-size: 32px; }
+  </style>
+  <text x="0" y="30" class="text">
+    <tspan fill="#f8fafc">bye</tspan><tspan fill="#0ea5e9">-bg</tspan>
+  </text>
+</svg>

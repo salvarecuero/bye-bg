@@ -1,10 +1,31 @@
-# BYE-BG
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="logo-light.svg">
+    <source media="(prefers-color-scheme: light)" srcset="logo-dark.svg">
+    <img src="logo-dark.svg" alt="bye-bg" height="48">
+  </picture>
+</p>
 
-**AI-powered background removal that runs entirely in your browser.**
+<p align="center">
+  <strong>AI-powered background removal that runs entirely in your browser.</strong><br>
+  Your images never leave your device — all processing happens locally using WebGPU.
+</p>
 
-Remove backgrounds from images with zero uploads. Your images never leave your device — all processing happens locally using WebGPU and WebAssembly.
+<p align="center">
+  <a href="#features">Features</a> •
+  <a href="#quick-start">Quick Start</a> •
+  <a href="#how-it-works">How It Works</a> •
+  <a href="#development">Development</a>
+</p>
 
-![BYE-BG Screenshot](screenshot.png)
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License"></a>
+  <img src="https://img.shields.io/badge/TypeScript-5.0-3178c6?logo=typescript&logoColor=white" alt="TypeScript">
+</p>
+
+<p align="center">
+  <img src="screenshot.png" alt="bye-bg in action" width="700">
+</p>
 
 ## Features
 
@@ -43,7 +64,7 @@ Open [http://localhost:5173](http://localhost:5173) in your browser.
 3. **Composite** — The result is blended with your chosen background
 4. **Export** — Download as PNG or WebP, or copy to clipboard
 
-The app automatically detects your hardware capabilities and selects the optimal backend:
+The app automatically detects your hardware and selects the optimal backend:
 
 - **WebGPU (FP16)** — Fastest, for modern GPUs with half-precision support
 - **WebGPU (FP32)** — Fast, for GPUs without FP16
@@ -64,7 +85,7 @@ The app recommends a tier based on your device's capabilities.
 - **Chrome 113+** / **Edge 113+** — Full WebGPU support
 - **Firefox** / **Safari** — WASM fallback (slower but functional)
 
-For optimal performance, the dev server sets COOP/COEP headers to enable SharedArrayBuffer. The app works without these headers but runs slower.
+For optimal performance, the dev server sets COOP/COEP headers to enable SharedArrayBuffer.
 
 ## Development
 
@@ -76,7 +97,7 @@ For optimal performance, the dev server sets COOP/COEP headers to enable SharedA
 | `npm run lint` | Run ESLint |
 | `npm run format` | Format with Prettier |
 
-## Project Structure
+### Project Structure
 
 ```
 src/
@@ -91,10 +112,8 @@ src/
     └── useBatchProcessor.ts # Batch processing logic
 ```
 
-## License
+---
 
-MIT License — see [LICENSE](LICENSE) for details.
-
-## Credits
-
-Built with [@imgly/background-removal](https://github.com/imgly/background-removal-js), which provides the ONNX models and inference wrapper.
+<p align="center">
+  <a href="LICENSE">MIT License</a> · Built with <a href="https://github.com/imgly/background-removal-js">@imgly/background-removal</a>
+</p>
