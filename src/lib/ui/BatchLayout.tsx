@@ -47,8 +47,8 @@ export function BatchLayout({
   }
 
   return (
-    <div className="flex gap-4 h-[500px]">
-      {/* Sidebar */}
+    <div className="flex flex-col xl:flex-row gap-4 min-h-[400px] lg:min-h-[450px] xl:h-[500px]">
+      {/* Sidebar - horizontal strip on mobile, vertical on desktop */}
       <BatchSidebar
         items={items}
         selectedItemId={selectedItemId}

@@ -18,27 +18,42 @@ export function BatchSidebarItem({ item, isSelected, onClick, onRemove }: Props)
     <button
       onClick={onClick}
       className={clsx(
-        'group w-full flex items-center gap-2 rounded-xl p-2 transition-all duration-150 text-left',
+        'group flex items-center gap-2 rounded-xl p-1.5 xl:p-2 transition-all duration-150 text-left',
+        'w-auto shrink-0 xl:w-full',
         isSelected && 'ring-2 ring-accent bg-accent/10',
         !isSelected && 'hover:bg-slate-800/50'
       )}
     >
-      {/* Thumbnail 40x40 */}
-      <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-slate-800">
+      {/* Thumbnail - larger on mobile for touch, normal on desktop */}
+      <div className="relative h-12 w-12 xl:h-10 xl:w-10 shrink-0 overflow-hidden rounded-lg bg-slate-800">
         <img
           src={item.result?.outputUrl || item.thumbnailUrl}
           alt={item.originalName}
           className="h-full w-full object-cover"
         />
+        {/* Status overlay */}
         {isProcessing && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/40">
             <div className="h-4 w-4 animate-spin rounded-full border-2 border-accent border-t-transparent" />
           </div>
         )}
+        {/* Mobile: Status badge overlay */}
+        <div className="xl:hidden absolute -bottom-0.5 -right-0.5">
+          {isCompleted && (
+            <div className="h-4 w-4 rounded-full bg-emerald-500 flex items-center justify-center">
+              <FiCheck className="h-2.5 w-2.5 text-white" />
+            </div>
+          )}
+          {isError && (
+            <div className="h-4 w-4 rounded-full bg-red-500 flex items-center justify-center">
+              <FiAlertTriangle className="h-2.5 w-2.5 text-white" />
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Name + status */}
-      <div className="flex-1 min-w-0 pr-1">
+      {/* Name + status - hidden on mobile, shown on desktop */}
+      <div className="hidden xl:block flex-1 min-w-0 pr-1">
         <div className="truncate text-sm text-slate-200">{item.originalName}</div>
         <div className="flex items-center gap-1.5 text-xs">
           {item.status === 'pending' && (
@@ -77,14 +92,14 @@ export function BatchSidebarItem({ item, isSelected, onClick, onRemove }: Props)
         )}
       </div>
 
-      {/* Remove button - visible on hover, hidden when processing */}
+      {/* Remove button - desktop only, visible on hover */}
       {!isProcessing && (
         <button
           onClick={(e) => {
             e.stopPropagation();
             onRemove();
           }}
-          className="shrink-0 rounded-lg p-1.5 text-slate-500 opacity-0 group-hover:opacity-100 hover:text-slate-200 hover:bg-slate-700/50 transition-all"
+          className="hidden xl:block shrink-0 rounded-lg p-1.5 text-slate-500 opacity-0 group-hover:opacity-100 hover:text-slate-200 hover:bg-slate-700/50 transition-all"
           title="Remove from queue"
         >
           <FiX className="h-3.5 w-3.5" />

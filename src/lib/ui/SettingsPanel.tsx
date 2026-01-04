@@ -133,7 +133,7 @@ export function SettingsPanel({
               <button
                 key={opt.key}
                 className={clsx(
-                  'relative flex items-center justify-center gap-1.5 rounded-lg py-2 text-sm font-medium transition',
+                  'relative flex items-center justify-center gap-1.5 rounded-lg py-2.5 md:py-2 text-sm font-medium transition',
                   device === opt.key
                     ? 'bg-accent text-white'
                     : isDisabled
@@ -168,7 +168,7 @@ export function SettingsPanel({
               <button
                 key={q.key}
                 className={clsx(
-                  'relative flex flex-col items-center rounded-lg py-2 transition',
+                  'relative flex flex-col items-center rounded-lg py-2.5 md:py-2 transition',
                   quality === q.key
                     ? 'bg-accent text-white'
                     : 'text-slate-200 hover:bg-slate-800'
@@ -236,7 +236,7 @@ export function SettingsPanel({
               key={opt.key}
               onClick={() => onBgMode(opt.key as BackgroundMode)}
               className={clsx(
-                'rounded-xl border px-3 py-2.5 text-sm font-medium transition',
+                'rounded-xl border px-2 sm:px-3 py-2.5 text-xs sm:text-sm font-medium transition whitespace-nowrap',
                 bgMode === opt.key
                   ? 'border-accent bg-accent/10 text-white'
                   : 'border-slate-600 text-slate-200 hover:border-slate-400 hover:text-white'

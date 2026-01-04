@@ -1,4 +1,4 @@
-import { FiDownload, FiCheck, FiAlertTriangle, FiArchive } from 'react-icons/fi';
+import { FiDownload, FiCheck, FiAlertTriangle, FiArchive, FiPlay, FiSquare } from 'react-icons/fi';
 import clsx from 'clsx';
 import { CompareSlider } from './CompareSlider';
 import { BatchOverview } from './BatchOverview';
@@ -103,7 +103,7 @@ export function BatchMainContent({
       </div>
 
       {/* Comparison slider - takes remaining space */}
-      <div className="flex-1 min-h-0">
+      <div className="h-[250px] sm:h-[300px] xl:h-auto xl:flex-1 xl:min-h-0">
         <CompareSlider
           beforeUrl={selectedItem.thumbnailUrl}
           afterUrl={selectedItem.result?.outputUrl}
@@ -113,7 +113,27 @@ export function BatchMainContent({
 
       {/* Action buttons - centered */}
       <div className="mt-4 flex items-center justify-center gap-2">
-        {/* Single item download - first */}
+        {/* Start/Stop processing buttons */}
+        {hasPending && !isProcessing && (
+          <button
+            onClick={onStartProcessing}
+            className="flex items-center gap-2 rounded-xl bg-accent px-4 py-2 text-sm font-semibold text-white transition hover:bg-accentHover shadow-glow-sm hover:shadow-glow"
+          >
+            <FiPlay className="h-4 w-4" />
+            Start Processing
+          </button>
+        )}
+        {isProcessing && (
+          <button
+            onClick={onStopProcessing}
+            className="flex items-center gap-2 rounded-xl border border-amber-500/50 px-4 py-2 text-sm font-semibold text-amber-400 transition hover:bg-amber-500/10"
+          >
+            <FiSquare className="h-4 w-4" />
+            Stop
+          </button>
+        )}
+
+        {/* Single item download */}
         {isItemCompleted && (
           <button
             onClick={() => onDownloadItem(selectedItem)}

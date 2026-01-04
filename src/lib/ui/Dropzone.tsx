@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { FiUploadCloud } from 'react-icons/fi';
+import { FiUploadCloud, FiPlus } from 'react-icons/fi';
 import clsx from 'clsx';
 
 type Props = {
@@ -9,9 +9,10 @@ type Props = {
   multiple?: boolean;
   disabled?: boolean;
   compact?: boolean;
+  minimal?: boolean; // Icon-only button for tight spaces
 };
 
-export function Dropzone({ onFile, onFiles, multiple = false, disabled, compact }: Props) {
+export function Dropzone({ onFile, onFiles, multiple = false, disabled, compact, minimal }: Props) {
   const onDrop = useCallback(
     (accepted: File[]) => {
       if (accepted.length === 0) return;
@@ -33,6 +34,25 @@ export function Dropzone({ onFile, onFiles, multiple = false, disabled, compact 
       'image/*': []
     }
   });
+
+  // Minimal mode: just an icon button
+  if (minimal) {
+    return (
+      <button
+        {...getRootProps()}
+        className={clsx(
+          'flex items-center justify-center rounded-lg p-2 text-slate-400',
+          'transition-all duration-200 hover:text-white hover:bg-slate-700/50',
+          disabled && 'opacity-60 cursor-not-allowed',
+          isDragActive && 'text-accent bg-accent/10'
+        )}
+        title="Add more files"
+      >
+        <input {...getInputProps()} />
+        <FiPlus className="h-4 w-4" />
+      </button>
+    );
+  }
 
   return (
     <div

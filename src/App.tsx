@@ -532,10 +532,10 @@ export default function App() {
           {/* Main content - vertically centered */}
           <div className="flex-1 flex items-center">
             <div className={clsx(
-              "grid w-full gap-4 md:gap-5 md:grid-cols-[2fr,1fr]",
+              "grid w-full gap-4 lg:gap-5 lg:grid-cols-[3fr,2fr] xl:grid-cols-[2fr,1fr]",
               batchMode && "items-center"
             )}>
-              <div className="space-y-4">
+              <div className="space-y-4 min-w-0">
             {/* Show Dropzone or BatchLayout based on mode */}
             {batchMode ? (
               <BatchLayout
@@ -646,7 +646,7 @@ export default function App() {
             )}
           </div>
 
-          <div className="space-y-3">
+          <div className="space-y-3 min-w-0">
             <SettingsPanel
               quality={quality}
               onQuality={setQuality}
