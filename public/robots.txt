@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://bye-bg.salvarecuero.dev/sitemap.xml

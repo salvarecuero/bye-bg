@@ -487,7 +487,7 @@ export default function App() {
         </div>
       </div>
 
-      <div className="flex-1 px-4 py-6 md:py-8 md:px-10">
+      <div className="flex-1 flex flex-col px-4 py-6 md:px-10 md:py-8">
         {/* Screen reader announcer */}
         <div
           id="sr-announcer"
@@ -513,8 +513,24 @@ export default function App() {
           }}
         />
 
-        <div className="mx-auto grid max-w-6xl gap-4 md:gap-5 md:grid-cols-[2fr,1fr]">
-          <div className="space-y-4">
+        <div className="mx-auto max-w-6xl w-full flex-1 flex flex-col">
+          {/* Header with logo - aligned with content */}
+          <header className="pb-4 md:pb-5">
+            <a
+              href="/"
+              className="group inline-flex items-baseline text-2xl font-bold tracking-tight transition-all"
+            >
+              <span className="text-white">bye</span>
+              <span className="text-accent group-hover:drop-shadow-[0_0_8px_rgba(14,165,233,0.5)] transition-all">
+                -bg
+              </span>
+            </a>
+          </header>
+
+          {/* Main content - vertically centered */}
+          <div className="flex-1 flex items-center">
+            <div className="grid w-full gap-4 md:gap-5 md:grid-cols-[2fr,1fr]">
+              <div className="space-y-4">
             {/* Show Dropzone or BatchQueue based on mode */}
             {batchMode ? (
               <BatchQueue
@@ -663,6 +679,8 @@ export default function App() {
                 Drop multiple images to enable batch mode
               </div>
             )}
+          </div>
+            </div>
           </div>
         </div>
 
