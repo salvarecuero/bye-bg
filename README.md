@@ -24,7 +24,9 @@
 </p>
 
 <p align="center">
-  <img src="screenshot.png" alt="bye-bg in action" width="700">
+  <a href="https://bye-bg.salvarecuero.dev">
+    <img src="screenshot.png" alt="bye-bg in action" width="700">
+  </a>
 </p>
 
 ## Features
@@ -82,8 +84,8 @@ The app recommends a tier based on your device's capabilities.
 
 ## Browser Support
 
-- **Chrome 113+** / **Edge 113+** — Full WebGPU support
-- **Firefox** / **Safari** — WASM fallback (slower but functional)
+- **Chrome 113+** / **Edge 113+** / **Firefox 120+** — Full WebGPU support
+- **Safari** / **Older browsers** — WASM fallback (slower but functional)
 
 For optimal performance, the dev server sets COOP/COEP headers to enable SharedArrayBuffer.
 

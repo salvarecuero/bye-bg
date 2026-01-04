@@ -457,7 +457,7 @@ export default function App() {
   return (
     <div
       {...getRootProps()}
-      className="min-h-screen bg-[#0b1221] flex flex-col relative"
+      className="h-screen overflow-hidden bg-[#0b1221] flex flex-col relative"
     >
       {/* Full-screen drop overlay */}
       <div
@@ -489,7 +489,7 @@ export default function App() {
         </div>
       </div>
 
-      <div className="flex-1 flex flex-col px-4 py-6 md:px-10 md:py-8">
+      <div className="flex-1 flex flex-col overflow-y-auto px-4 py-6 md:px-10 md:py-8">
         {/* Screen reader announcer */}
         <div
           id="sr-announcer"
