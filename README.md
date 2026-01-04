@@ -84,8 +84,10 @@ The app recommends a tier based on your device's capabilities.
 
 ## Browser Support
 
-- **Chrome 113+** / **Edge 113+** / **Firefox 120+** — Full WebGPU support
-- **Safari** / **Older browsers** — WASM fallback (slower but functional)
+- **Chrome 113+** / **Edge 113+** — Full WebGPU support
+- **Firefox 141+** — Full WebGPU support
+- **Safari 26+** — WebGPU support (macOS & iOS)
+- **Older browsers** — WASM fallback (slower but functional)
 
 For optimal performance, the dev server sets COOP/COEP headers to enable SharedArrayBuffer.
 

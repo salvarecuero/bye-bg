@@ -587,14 +587,18 @@ export default function App() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2 text-xs">
-                      {/* Backend chip with icon */}
+                      {/* Model + Backend chip with icon */}
                       <span className="flex items-center gap-1.5 rounded-full bg-slate-800/90 border border-slate-700/50 px-2.5 py-1 text-slate-200">
                         {backendLabel.includes("WebGPU") ? (
                           <FiZap className="h-3 w-3 text-accent" />
                         ) : (
                           <FiCpu className="h-3 w-3 text-slate-400" />
                         )}
-                        {backendLabel}
+                        <span className="font-mono">
+                          {quality === "pro" ? "isnet_fp16" : quality === "fast" ? "isnet_quint8" : "isnet"}
+                        </span>
+                        <span className="text-slate-500">·</span>
+                        <span className="text-slate-400">{backendLabel.includes("WebGPU") ? "WebGPU" : "WASM"}</span>
                       </span>
 
                       {/* Status chip with glow */}

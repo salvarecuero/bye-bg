@@ -36,10 +36,10 @@ type Props = {
   onDevice: (v: DevicePreference) => void;
 };
 
-const qualities: { key: Quality; label: string; size: string; description: string }[] = [
-  { key: 'fast', label: 'Fast', size: '~5MB', description: 'Lightweight quantized model. Quick results, slightly lower edge quality.' },
-  { key: 'quality', label: 'Balanced', size: '~40MB', description: 'Balanced model for most images. Good quality with reasonable speed.' },
-  { key: 'pro', label: 'Pro', size: '~180MB', description: 'High-precision model. Best for complex images with fine details like hair.' }
+const qualities: { key: Quality; label: string; model: string; size: string; description: string }[] = [
+  { key: 'fast', label: 'Fast', model: 'isnet_quint8', size: '~5MB', description: 'Lightweight quantized model. Quick results, slightly lower edge quality.' },
+  { key: 'quality', label: 'Balanced', model: 'isnet', size: '~40MB', description: 'Balanced model for most images. Good quality with reasonable speed.' },
+  { key: 'pro', label: 'Pro', model: 'isnet_fp16', size: '~180MB', description: 'High-precision model. Best for complex images with fine details like hair.' }
 ];
 
 const backendDescriptions: Record<string, string> = {
@@ -183,8 +183,14 @@ export function SettingsPanel({
                   )}
                 </span>
                 <span className={clsx(
-                  'text-[10px]',
-                  quality === q.key ? 'text-white/70' : 'text-slate-500'
+                  'text-[11px] font-mono font-medium',
+                  quality === q.key ? 'text-white/90' : 'text-slate-300'
+                )}>
+                  {q.model}
+                </span>
+                <span className={clsx(
+                  'text-[10px] font-medium',
+                  quality === q.key ? 'text-white/70' : 'text-slate-400'
                 )}>
                   {q.size}
                 </span>
