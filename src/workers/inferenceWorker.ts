@@ -1,6 +1,10 @@
 /* eslint-disable no-restricted-globals */
 import { removeBackground } from '@imgly/background-removal';
 
+// Phase detection helpers - the library sends phases like 'fetch:/models/isnet' and 'compute:inference'
+const isDownloadPhase = (phase: string) => phase.startsWith('fetch:');
+const isComputePhase = (phase: string) => phase.startsWith('compute:');
+
 type InitMessage = {
   id: string;
   type: 'init';
@@ -59,7 +63,7 @@ self.onmessage = async (event: MessageEvent<Message>) => {
   // Phase timing tracking
   const timings: { download?: number; inference?: number; composite?: number } = {};
   let phaseStart = t0;
-  let currentPhase = 'download';
+  let currentPhase = ''; // Will be set by first progress callback
 
   try {
     const bytes = new Uint8Array(event.data.payload.image.bytes);
@@ -94,30 +98,36 @@ self.onmessage = async (event: MessageEvent<Message>) => {
         const pct = total > 0 ? (loaded / total) * 100 : 0;
 
         // Track phase transitions for timing
-        if (phase !== currentPhase) {
+        // Detect phase type changes (download → compute → other)
+        const wasDownload = isDownloadPhase(currentPhase);
+        const wasCompute = isComputePhase(currentPhase);
+        const isDownload = isDownloadPhase(phase);
+        const isCompute = isComputePhase(phase);
+        const phaseTypeChanged = wasDownload !== isDownload || wasCompute !== isCompute;
+
+        if (phaseTypeChanged) {
           const now = performance.now();
-          if (currentPhase === 'download') {
+          if (wasDownload) {
             timings.download = Math.round(now - phaseStart);
-          } else if (currentPhase === 'compute') {
+          } else if (wasCompute) {
             timings.inference = Math.round(now - phaseStart);
           }
           phaseStart = now;
-          currentPhase = phase;
         }
+        currentPhase = phase;
 
-        if (Math.abs(pct - lastProgress) > 2 || phase !== 'download') {
+        if (Math.abs(pct - lastProgress) > 2 || !isDownload) {
           lastProgress = pct;
           postMessage({
             id: processId,
             type: 'progress',
             payload: {
               phase,
-              message:
-                phase === 'download'
-                  ? `Downloading model ${Math.round(pct)}%`
-                  : phase === 'compute'
-                    ? 'Processing image…'
-                    : 'Processing…',
+              message: isDownload
+                ? `Downloading model ${Math.round(pct)}%`
+                : isCompute
+                  ? 'Processing image…'
+                  : 'Processing…',
               loaded,
               total,
               modelName: model,
@@ -129,7 +139,7 @@ self.onmessage = async (event: MessageEvent<Message>) => {
     });
 
     // Track compute phase end if still in compute
-    if (currentPhase === 'compute') {
+    if (isComputePhase(currentPhase)) {
       timings.inference = Math.round(performance.now() - phaseStart);
       phaseStart = performance.now();
     }
