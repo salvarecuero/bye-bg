@@ -19,6 +19,7 @@ import { copyImageToClipboard, isClipboardSupported } from "./lib/clipboard";
 import type { ProcessingStats, ProcessingPhase } from "./types/processing";
 import clsx from "clsx";
 import { FiZap, FiCpu, FiUploadCloud } from "react-icons/fi";
+import InferenceWorker from "./workers/inferenceWorker?worker";
 
 type WorkerMessage =
   | {
@@ -52,13 +53,11 @@ type WorkerMessage =
     }
   | { id: string; type: "error"; payload: { message: string } };
 
-const workerUrl = new URL("./workers/inferenceWorker.ts", import.meta.url);
-
 function useInferenceWorker() {
   const workerRef = useRef<Worker | null>(null);
 
   useEffect(() => {
-    workerRef.current = new Worker(workerUrl, { type: "module" });
+    workerRef.current = new InferenceWorker();
     return () => workerRef.current?.terminate();
   }, []);
 
