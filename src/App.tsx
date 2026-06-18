@@ -8,6 +8,7 @@ import { ActionButtons } from "./lib/ui/ActionButtons";
 import { BatchLayout } from "./lib/ui/BatchLayout";
 import { ShortcutsPanel } from "./lib/ui/ShortcutsPanel";
 import { detectWebGPU } from "./lib/capabilities";
+import { announcePortfolioReady } from "./lib/portfolioEmbed";
 import { useKeyboardShortcuts } from "./lib/shortcuts";
 import { useBatchProcessor } from "./hooks/useBatchProcessor";
 import {
@@ -139,6 +140,9 @@ export default function App() {
         setBackendLabel("Error");
       });
   }, []);
+
+  // Signal interactive-readiness to the portfolio when framed as a live Embed (no-op otherwise).
+  useEffect(() => announcePortfolioReady(), []);
 
   // Update backend label when device selection changes
   useEffect(() => {
