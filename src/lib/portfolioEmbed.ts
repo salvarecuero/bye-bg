@@ -11,7 +11,11 @@
  * the handshake), the retry stops after a bounded number of tries and the parent still reveals
  * via its own load/ceiling fallback.
  */
-const PARENT_ORIGINS = ['https://salvarecuero.dev', 'http://localhost:4321'];
+const PARENT_ORIGINS = [
+  'https://salvarecuero.dev',
+  'https://www.salvarecuero.dev',
+  'http://localhost:4321',
+];
 const PROTOCOL_VERSION = 1;
 const MAX_TRIES = 10;
 const RETRY_MS = 250;
