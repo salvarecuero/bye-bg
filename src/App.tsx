@@ -7,7 +7,11 @@ import { ProcessingPanel } from "./lib/ui/ProcessingPanel";
 import { ActionButtons } from "./lib/ui/ActionButtons";
 import { BatchLayout } from "./lib/ui/BatchLayout";
 import { ShortcutsPanel } from "./lib/ui/ShortcutsPanel";
-import { detectWebGPU } from "./lib/capabilities";
+import {
+  detectWebGPU,
+  deviceMemoryTier,
+  recommendedQualityTier,
+} from "./lib/capabilities";
 import { announcePortfolioReady } from "./lib/portfolioEmbed";
 import { useKeyboardShortcuts } from "./lib/shortcuts";
 import { useBatchProcessor } from "./hooks/useBatchProcessor";
@@ -16,7 +20,7 @@ import {
   downloadAllSeparate,
   downloadAsZip,
 } from "./lib/download";
-import { copyImageToClipboard, isClipboardSupported } from "./lib/clipboard";
+import { copyImageToClipboard } from "./lib/clipboard";
 import type { ProcessingStats, ProcessingPhase } from "./types/processing";
 import clsx from "clsx";
 import { FiZap, FiCpu, FiUploadCloud } from "react-icons/fi";
@@ -39,7 +43,7 @@ type WorkerMessage =
       id: string;
       type: "result";
       payload: {
-        rgbaPngBytes: number[];
+        rgbaPngBytes: ArrayBuffer;
         width: number;
         height: number;
         timingMs: number;
@@ -70,11 +74,10 @@ export default function App() {
   const [quality, setQuality] = useState<"fast" | "quality" | "pro">("quality");
   const [refine, setRefine] = useState(true);
   const [bgMode, setBgMode] = useState<"transparent" | "color" | "image">(
-    "transparent"
+    "transparent",
   );
   const [bgColor, setBgColor] = useState("#0ea5e9");
-  const [bgImageBytes, setBgImageBytes] = useState<number[]>();
-  const [bgImageUrl, setBgImageUrl] = useState<string>();
+  const [bgImageBytes, setBgImageBytes] = useState<ArrayBuffer>();
   const [exportFmt, setExportFmt] = useState<"png" | "webp">("png");
   const [inputUrl, setInputUrl] = useState<string>();
   const [outputUrl, setOutputUrl] = useState<string>();
@@ -86,11 +89,11 @@ export default function App() {
   });
   const [backendLabel, setBackendLabel] = useState("Detecting…");
   const [cachedImage, setCachedImage] = useState<{
-    bytes: number[];
+    bytes: ArrayBuffer;
     mime: string;
   }>();
   const [modelStatus, setModelStatus] = useState<"loading" | "ready" | "error">(
-    "loading"
+    "loading",
   );
   const [capabilities, setCapabilities] = useState<{
     webgpu: boolean;
@@ -101,7 +104,9 @@ export default function App() {
 
   // Batch mode state
   const [batchMode, setBatchMode] = useState(false);
-  const [selectedBatchItemId, setSelectedBatchItemId] = useState<string | null>(null);
+  const [selectedBatchItemId, setSelectedBatchItemId] = useState<string | null>(
+    null,
+  );
   const [showShortcuts, setShowShortcuts] = useState(false);
 
   // File input ref for keyboard shortcut
@@ -121,11 +126,11 @@ export default function App() {
   useEffect(() => {
     detectWebGPU()
       .then(({ supported, shaderF16 }) => {
-        const recommended: "fast" | "quality" | "pro" = !supported
-          ? "fast"
-          : shaderF16
-            ? "quality"
-            : "quality";
+        const recommended = recommendedQualityTier({
+          webgpu: supported,
+          fp16: shaderF16,
+          memoryTier: deviceMemoryTier(),
+        });
         setCapabilities({ webgpu: supported, fp16: shaderF16, recommended });
         setQuality(recommended);
         if (supported) {
@@ -241,7 +246,7 @@ export default function App() {
     };
     w.addEventListener("message", onMessage);
     return () => w.removeEventListener("message", onMessage);
-  }, [worker, exportFmt, batchMode]);
+  }, [worker, exportFmt, batchMode, quality, refine]);
 
   const handleFile = async (file: File) => {
     // Switch to single mode if in batch mode
@@ -250,10 +255,13 @@ export default function App() {
       batchProcessor.clearAll();
     }
 
-    const arr = new Uint8Array(await file.arrayBuffer());
-    const imageBytes = Array.from(arr);
-    setCachedImage({ bytes: imageBytes, mime: file.type });
-    const url = URL.createObjectURL(new Blob([arr], { type: file.type }));
+    const imageBytes = await file.arrayBuffer();
+    const cachedBytes = imageBytes.slice(0);
+    const bgBytes = bgImageBytes?.slice(0);
+    setCachedImage({ bytes: cachedBytes, mime: file.type });
+    const url = URL.createObjectURL(
+      new Blob([cachedBytes], { type: file.type }),
+    );
     setInputUrl((prev) => {
       if (prev) URL.revokeObjectURL(prev);
       return url;
@@ -271,22 +279,28 @@ export default function App() {
       progress: 0,
       message: "Starting…",
     });
-    worker.current.postMessage({
-      id: requestId,
-      type: "process",
-      payload: {
-        image: { kind: "blob", mime: file.type, bytes: imageBytes },
-        options: {
-          tier: quality,
-          refineEdges: refine,
-          bgMode: bgImageBytes ? "image" : bgMode,
-          bgColor,
-          bgImageBytes,
-          exportFormat: exportFmt,
-          device,
+    const transfer: Transferable[] = [imageBytes];
+    if (bgBytes) transfer.push(bgBytes);
+
+    worker.current.postMessage(
+      {
+        id: requestId,
+        type: "process",
+        payload: {
+          image: { kind: "blob", mime: file.type, bytes: imageBytes },
+          options: {
+            tier: quality,
+            refineEdges: refine,
+            bgMode: bgBytes ? "image" : bgMode,
+            bgColor,
+            bgImageBytes: bgBytes,
+            exportFormat: exportFmt,
+            device,
+          },
         },
       },
-    });
+      transfer,
+    );
   };
 
   const handleFiles = (files: File[]) => {
@@ -325,26 +339,34 @@ export default function App() {
       progress: 0,
       message: "Reprocessing…",
     });
-    worker.current.postMessage({
-      id: requestId,
-      type: "process",
-      payload: {
-        image: {
-          kind: "blob",
-          mime: cachedImage.mime,
-          bytes: cachedImage.bytes,
-        },
-        options: {
-          tier: quality,
-          refineEdges: refine,
-          bgMode: bgImageBytes ? "image" : bgMode,
-          bgColor,
-          bgImageBytes,
-          exportFormat: exportFmt,
-          device,
+    const imageBytes = cachedImage.bytes.slice(0);
+    const bgBytes = bgImageBytes?.slice(0);
+    const transfer: Transferable[] = [imageBytes];
+    if (bgBytes) transfer.push(bgBytes);
+
+    worker.current.postMessage(
+      {
+        id: requestId,
+        type: "process",
+        payload: {
+          image: {
+            kind: "blob",
+            mime: cachedImage.mime,
+            bytes: imageBytes,
+          },
+          options: {
+            tier: quality,
+            refineEdges: refine,
+            bgMode: bgBytes ? "image" : bgMode,
+            bgColor,
+            bgImageBytes: bgBytes,
+            exportFormat: exportFmt,
+            device,
+          },
         },
       },
-    });
+      transfer,
+    );
   };
 
   const bgInputRef = useRef<HTMLInputElement | null>(null);
@@ -356,13 +378,7 @@ export default function App() {
   const onBgImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const arr = new Uint8Array(await file.arrayBuffer());
-    setBgImageBytes(Array.from(arr));
-    const url = URL.createObjectURL(new Blob([arr], { type: file.type }));
-    setBgImageUrl((prev) => {
-      if (prev) URL.revokeObjectURL(prev);
-      return url;
-    });
+    setBgImageBytes(await file.arrayBuffer());
     setBgMode("image");
   };
 
@@ -395,10 +411,6 @@ export default function App() {
       return undefined;
     });
     setBgImageBytes(undefined);
-    setBgImageUrl((prev) => {
-      if (prev) URL.revokeObjectURL(prev);
-      return undefined;
-    });
     setCachedImage(undefined);
     setProcessing(false);
     setProcessingStats({ phase: "idle", progress: 0, message: "" });
@@ -423,7 +435,7 @@ export default function App() {
       hasInput: !!inputUrl,
       hasCachedImage: !!cachedImage,
     }),
-    [processing, batchProcessor.isProcessing, outputUrl, inputUrl, cachedImage]
+    [processing, batchProcessor.isProcessing, outputUrl, inputUrl, cachedImage],
   );
 
   useKeyboardShortcuts(
@@ -436,7 +448,7 @@ export default function App() {
       help: () => setShowShortcuts((prev) => !prev),
     },
     appState,
-    true
+    true,
   );
 
   // Full-screen drop zone
@@ -467,7 +479,7 @@ export default function App() {
         className={clsx(
           "fixed inset-0 z-40 flex items-center justify-center pointer-events-none",
           "transition-all duration-200",
-          isDragActive ? "opacity-100" : "opacity-0"
+          isDragActive ? "opacity-100" : "opacity-0",
         )}
       >
         <div
@@ -475,7 +487,7 @@ export default function App() {
             "absolute inset-4 rounded-3xl border-2 border-dashed",
             "bg-black/60 backdrop-blur-md",
             "flex flex-col items-center justify-center gap-4",
-            isDragActive ? "border-accent shadow-glow" : "border-transparent"
+            isDragActive ? "border-accent shadow-glow" : "border-transparent",
           )}
         >
           <div className="rounded-full bg-accent/20 p-6">
@@ -534,166 +546,178 @@ export default function App() {
 
           {/* Main content - vertically centered */}
           <div className="flex-1 flex items-center">
-            <div className={clsx(
-              "grid w-full gap-4 lg:gap-5 lg:grid-cols-[3fr,2fr] xl:grid-cols-[2fr,1fr]",
-              batchMode && "items-center"
-            )}>
+            <div
+              className={clsx(
+                "grid w-full gap-4 lg:gap-5 lg:grid-cols-[3fr,2fr] xl:grid-cols-[2fr,1fr]",
+                batchMode && "items-center",
+              )}
+            >
               <div className="space-y-4 min-w-0">
-            {/* Show Dropzone or BatchLayout based on mode */}
-            {batchMode ? (
-              <BatchLayout
-                items={batchProcessor.items}
-                selectedItemId={selectedBatchItemId}
-                onSelectItem={setSelectedBatchItemId}
-                isProcessing={batchProcessor.isProcessing}
-                completedCount={batchProcessor.completedCount}
-                errorCount={batchProcessor.errorCount}
-                exportFormat={exportFmt}
-                onAddFiles={batchProcessor.addFiles}
-                onRemoveItem={batchProcessor.removeItem}
-                onClearAll={() => {
-                  batchProcessor.clearAll();
-                  setBatchMode(false);
-                  setSelectedBatchItemId(null);
-                }}
-                onStartProcessing={batchProcessor.startProcessing}
-                onStopProcessing={batchProcessor.stopProcessing}
-                onDownloadItem={(item) => downloadBatchItem(item, exportFmt)}
-                onDownloadAll={() =>
-                  downloadAllSeparate(batchProcessor.items, exportFmt)
-                }
-                onDownloadZip={() =>
-                  downloadAsZip(batchProcessor.items, exportFmt)
-                }
-              />
-            ) : (
-              <>
-                <Dropzone
-                  onFile={handleFile}
-                  onFiles={handleFiles}
-                  multiple
-                  disabled={processing}
+                {/* Show Dropzone or BatchLayout based on mode */}
+                {batchMode ? (
+                  <BatchLayout
+                    items={batchProcessor.items}
+                    selectedItemId={selectedBatchItemId}
+                    onSelectItem={setSelectedBatchItemId}
+                    isProcessing={batchProcessor.isProcessing}
+                    completedCount={batchProcessor.completedCount}
+                    errorCount={batchProcessor.errorCount}
+                    exportFormat={exportFmt}
+                    onAddFiles={batchProcessor.addFiles}
+                    onRemoveItem={batchProcessor.removeItem}
+                    onClearAll={() => {
+                      batchProcessor.clearAll();
+                      setBatchMode(false);
+                      setSelectedBatchItemId(null);
+                    }}
+                    onStartProcessing={batchProcessor.startProcessing}
+                    onStopProcessing={batchProcessor.stopProcessing}
+                    onDownloadItem={(item) =>
+                      downloadBatchItem(item, exportFmt)
+                    }
+                    onDownloadAll={() =>
+                      downloadAllSeparate(batchProcessor.items, exportFmt)
+                    }
+                    onDownloadZip={() =>
+                      downloadAsZip(batchProcessor.items, exportFmt)
+                    }
+                  />
+                ) : (
+                  <>
+                    <Dropzone
+                      onFile={handleFile}
+                      onFiles={handleFiles}
+                      multiple
+                      disabled={processing}
+                    />
+
+                    <div className="rounded-3xl bg-[#0d1426] p-4 glass">
+                      <div className="mb-3 flex items-center justify-between text-sm text-slate-300">
+                        <div>
+                          <div className="text-lg font-semibold text-white">
+                            Before / After
+                          </div>
+                          <div className="text-xs text-slate-400">
+                            {processing
+                              ? "Processing…"
+                              : outputUrl
+                                ? "Drag handle to compare"
+                                : "Load an image to begin"}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 text-xs">
+                          {/* Model + Backend chip with icon */}
+                          <span className="flex items-center gap-1.5 rounded-full bg-slate-800/90 border border-slate-700/50 px-2.5 py-1 text-slate-200">
+                            {backendLabel.includes("WebGPU") ? (
+                              <FiZap className="h-3 w-3 text-accent" />
+                            ) : (
+                              <FiCpu className="h-3 w-3 text-slate-400" />
+                            )}
+                            <span className="font-mono">
+                              {quality === "pro"
+                                ? "isnet_fp16"
+                                : quality === "fast"
+                                  ? "isnet_quint8"
+                                  : "isnet"}
+                            </span>
+                            <span className="text-slate-500">·</span>
+                            <span className="text-slate-400">
+                              {backendLabel.includes("WebGPU")
+                                ? "WebGPU"
+                                : "WASM"}
+                            </span>
+                          </span>
+
+                          {/* Status chip with glow */}
+                          <span
+                            className={clsx(
+                              "flex items-center gap-1.5 rounded-full px-2.5 py-1 border",
+                              processing
+                                ? "bg-amber-500/15 border-amber-500/30 text-amber-400"
+                                : outputUrl
+                                  ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-400 shadow-[0_0_10px_rgba(34,197,94,0.2)]"
+                                  : "bg-slate-800/90 border-slate-700/50 text-slate-400",
+                            )}
+                          >
+                            {/* Status indicator dot */}
+                            <span
+                              className={clsx(
+                                "h-1.5 w-1.5 rounded-full",
+                                processing && "bg-amber-400 animate-pulse",
+                                outputUrl && !processing && "bg-emerald-400",
+                                !outputUrl && !processing && "bg-slate-500",
+                              )}
+                            />
+                            {statusLabel}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="aspect-[4/3] md:aspect-[16/10]">
+                        <CompareSlider
+                          beforeUrl={inputUrl}
+                          afterUrl={outputUrl}
+                          processing={processing}
+                        />
+                      </div>
+
+                      <div className="mt-4">
+                        <ActionButtons
+                          outputUrl={outputUrl}
+                          exportFormat={exportFmt}
+                          canReprocess={!!cachedImage && !!outputUrl}
+                          processing={processing}
+                          onDownload={handleDownload}
+                          onReprocess={reprocess}
+                          onReset={reset}
+                        />
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              <div className="space-y-3 min-w-0">
+                <SettingsPanel
+                  quality={quality}
+                  onQuality={setQuality}
+                  refine={refine}
+                  onRefine={setRefine}
+                  bgMode={bgMode}
+                  onBgMode={setBgMode}
+                  bgColor={bgColor}
+                  onBgColor={setBgColor}
+                  exportFormat={exportFmt}
+                  onExportFormat={setExportFmt}
+                  onBgImageUpload={onBgImageUpload}
+                  processing={isAnyProcessing}
+                  backendLabel={backendLabel}
+                  modelStatus={modelStatus}
+                  capabilities={capabilities}
+                  device={device}
+                  onDevice={setDevice}
                 />
 
-                <div className="rounded-3xl bg-[#0d1426] p-4 glass">
-                  <div className="mb-3 flex items-center justify-between text-sm text-slate-300">
-                    <div>
-                      <div className="text-lg font-semibold text-white">
-                        Before / After
-                      </div>
-                      <div className="text-xs text-slate-400">
-                        {processing
-                          ? "Processing…"
-                          : outputUrl
-                            ? "Drag handle to compare"
-                            : "Load an image to begin"}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 text-xs">
-                      {/* Model + Backend chip with icon */}
-                      <span className="flex items-center gap-1.5 rounded-full bg-slate-800/90 border border-slate-700/50 px-2.5 py-1 text-slate-200">
-                        {backendLabel.includes("WebGPU") ? (
-                          <FiZap className="h-3 w-3 text-accent" />
-                        ) : (
-                          <FiCpu className="h-3 w-3 text-slate-400" />
-                        )}
-                        <span className="font-mono">
-                          {quality === "pro" ? "isnet_fp16" : quality === "fast" ? "isnet_quint8" : "isnet"}
-                        </span>
-                        <span className="text-slate-500">·</span>
-                        <span className="text-slate-400">{backendLabel.includes("WebGPU") ? "WebGPU" : "WASM"}</span>
-                      </span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  ref={bgInputRef}
+                  onChange={onBgImageChange}
+                />
 
-                      {/* Status chip with glow */}
-                      <span
-                        className={clsx(
-                          "flex items-center gap-1.5 rounded-full px-2.5 py-1 border",
-                          processing
-                            ? "bg-amber-500/15 border-amber-500/30 text-amber-400"
-                            : outputUrl
-                              ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-400 shadow-[0_0_10px_rgba(34,197,94,0.2)]"
-                              : "bg-slate-800/90 border-slate-700/50 text-slate-400"
-                        )}
-                      >
-                        {/* Status indicator dot */}
-                        <span
-                          className={clsx(
-                            "h-1.5 w-1.5 rounded-full",
-                            processing && "bg-amber-400 animate-pulse",
-                            outputUrl && !processing && "bg-emerald-400",
-                            !outputUrl && !processing && "bg-slate-500"
-                          )}
-                        />
-                        {statusLabel}
-                      </span>
-                    </div>
+                <ProcessingPanel
+                  stats={processingStats}
+                  backendLabel={backendLabel}
+                />
+
+                {/* Mode toggle hint */}
+                {!batchMode && inputUrl && (
+                  <div className="text-center text-xs text-slate-500">
+                    Drop multiple images to enable batch mode
                   </div>
-
-                  <div className="aspect-[4/3] md:aspect-[16/10]">
-                    <CompareSlider
-                      beforeUrl={inputUrl}
-                      afterUrl={outputUrl}
-                      processing={processing}
-                    />
-                  </div>
-
-                  <div className="mt-4">
-                    <ActionButtons
-                      outputUrl={outputUrl}
-                      exportFormat={exportFmt}
-                      canReprocess={!!cachedImage && !!outputUrl}
-                      processing={processing}
-                      onDownload={handleDownload}
-                      onReprocess={reprocess}
-                      onReset={reset}
-                    />
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
-
-          <div className="space-y-3 min-w-0">
-            <SettingsPanel
-              quality={quality}
-              onQuality={setQuality}
-              refine={refine}
-              onRefine={setRefine}
-              bgMode={bgMode}
-              onBgMode={setBgMode}
-              bgColor={bgColor}
-              onBgColor={setBgColor}
-              exportFormat={exportFmt}
-              onExportFormat={setExportFmt}
-              onBgImageUpload={onBgImageUpload}
-              processing={isAnyProcessing}
-              backendLabel={backendLabel}
-              modelStatus={modelStatus}
-              capabilities={capabilities}
-              device={device}
-              onDevice={setDevice}
-            />
-
-            <input
-              type="file"
-              accept="image/*"
-              className="hidden"
-              ref={bgInputRef}
-              onChange={onBgImageChange}
-            />
-
-            <ProcessingPanel
-              stats={processingStats}
-              backendLabel={backendLabel}
-            />
-
-            {/* Mode toggle hint */}
-            {!batchMode && inputUrl && (
-              <div className="text-center text-xs text-slate-500">
-                Drop multiple images to enable batch mode
+                )}
               </div>
-            )}
-          </div>
             </div>
           </div>
         </div>

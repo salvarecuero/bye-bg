@@ -1,20 +1,20 @@
-export type BackendKind = 'webgpu-fp16' | 'webgpu-fp32' | 'wasm';
+export type QualityTier = "fast" | "quality" | "pro";
 
 export async function detectWebGPU(): Promise<{
   supported: boolean;
   shaderF16: boolean;
 }> {
-  if (!('gpu' in navigator)) {
+  if (!("gpu" in navigator)) {
     return { supported: false, shaderF16: false };
   }
   // @ts-expect-error nonstandard
   const adapter = await navigator.gpu?.requestAdapter?.({
-    powerPreference: 'high-performance'
+    powerPreference: "high-performance",
   });
   if (!adapter) {
     return { supported: false, shaderF16: false };
   }
-  const shaderF16 = adapter.features?.has?.('shader-f16') ?? false;
+  const shaderF16 = adapter.features?.has?.("shader-f16") ?? false;
   return { supported: true, shaderF16 };
 }
 
@@ -26,3 +26,20 @@ export function deviceMemoryTier(): number {
   return 0;
 }
 
+export function recommendedQualityTier({
+  webgpu,
+  fp16,
+  memoryTier,
+}: {
+  webgpu: boolean;
+  fp16: boolean;
+  memoryTier: number;
+}): QualityTier {
+  if (!webgpu || memoryTier === 0) return "fast";
+
+  // Keep the default conservative: `pro` pulls the largest model, so expose it as
+  // a manual upgrade instead of auto-downloading it on the first processing run.
+  if (fp16 && memoryTier >= 2) return "quality";
+
+  return "quality";
+}

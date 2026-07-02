@@ -1,52 +1,55 @@
-export async function decodeImage(bytes: Uint8Array): Promise<ImageBitmap> {
-  const blob = new Blob([bytes as BlobPart]);
-  return createImageBitmap(blob);
-}
+export function refineAlphaEdges(
+  imageData: ImageData,
+  options: {
+    strength?: number;
+    transparentThreshold?: number;
+    opaqueThreshold?: number;
+  } = {},
+): ImageData {
+  const { data, width, height } = imageData;
+  const strength = options.strength ?? 0.45;
+  const transparentThreshold = options.transparentThreshold ?? 8;
+  const opaqueThreshold = options.opaqueThreshold ?? 247;
+  const alpha = new Uint8ClampedArray(width * height);
+  const blurred = new Uint8ClampedArray(width * height);
 
-export function downscale(
-  bitmap: ImageBitmap,
-  maxDim: number
-): { bitmap: OffscreenCanvas; scale: number } {
-  const { width, height } = bitmap;
-  const scale = Math.min(1, maxDim / Math.max(width, height));
-  const targetW = Math.max(1, Math.round(width * scale));
-  const targetH = Math.max(1, Math.round(height * scale));
-  const canvas = new OffscreenCanvas(targetW, targetH);
-  const ctx = canvas.getContext('2d', { willReadFrequently: true });
-  if (!ctx) throw new Error('2d context unavailable');
-  ctx.drawImage(bitmap, 0, 0, targetW, targetH);
-  return { bitmap: canvas, scale };
-}
-
-export function drawComposite(
-  fg: ImageBitmap | OffscreenCanvas,
-  alpha: ImageData,
-  bgMode: 'transparent' | 'color',
-  bgColor: string,
-  outSize: { width: number; height: number }
-): OffscreenCanvas {
-  const canvas = new OffscreenCanvas(outSize.width, outSize.height);
-  const ctx = canvas.getContext('2d');
-  if (!ctx) throw new Error('2d context unavailable');
-
-  if (bgMode === 'color') {
-    ctx.fillStyle = bgColor;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  for (let i = 0, p = 3; i < alpha.length; i++, p += 4) {
+    const a = data[p];
+    alpha[i] = a < transparentThreshold ? 0 : a > opaqueThreshold ? 255 : a;
   }
 
-  ctx.putImageData(alpha, 0, 0);
-  ctx.globalCompositeOperation = 'source-in';
-  ctx.drawImage(fg as any, 0, 0, canvas.width, canvas.height);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      let sum = 0;
+      let count = 0;
 
-  return canvas;
+      for (let dy = -1; dy <= 1; dy++) {
+        const yy = y + dy;
+        if (yy < 0 || yy >= height) continue;
+
+        for (let dx = -1; dx <= 1; dx++) {
+          const xx = x + dx;
+          if (xx < 0 || xx >= width) continue;
+          sum += alpha[yy * width + xx];
+          count++;
+        }
+      }
+
+      blurred[y * width + x] = Math.round(sum / count);
+    }
+  }
+
+  for (let i = 0, p = 3; i < alpha.length; i++, p += 4) {
+    const original = alpha[i];
+    if (original === 0 || original === 255) {
+      data[p] = original;
+      continue;
+    }
+
+    const edgeWeight = 1 - Math.abs(original - 128) / 128;
+    const mix = Math.max(0, Math.min(1, strength * edgeWeight));
+    data[p] = Math.round(original + (blurred[i] - original) * mix);
+  }
+
+  return imageData;
 }
-
-export async function toBlobBytes(
-  canvas: OffscreenCanvas,
-  mime: 'image/png' | 'image/webp'
-): Promise<Uint8Array> {
-  const blob = await canvas.convertToBlob({ type: mime });
-  const buf = await blob.arrayBuffer();
-  return new Uint8Array(buf);
-}
-

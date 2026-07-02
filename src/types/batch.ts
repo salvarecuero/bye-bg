@@ -1,11 +1,11 @@
-export type BatchItemStatus = 'pending' | 'processing' | 'completed' | 'error';
+export type BatchItemStatus = "pending" | "processing" | "completed" | "error";
 
 export type BatchItem = {
   id: string;
   file: File;
   originalName: string;
   thumbnailUrl: string;
-  inputBytes: number[];
+  inputBytes: ArrayBuffer;
   status: BatchItemStatus;
   progress?: {
     pct?: number;
@@ -19,10 +19,4 @@ export type BatchItem = {
     height: number;
   };
   error?: string;
-};
-
-export type BatchState = {
-  items: BatchItem[];
-  isProcessing: boolean;
-  currentIndex: number;
 };

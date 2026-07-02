@@ -1,7 +1,7 @@
-import { FiTrash2, FiPlus } from 'react-icons/fi';
-import { BatchSidebarItem } from './BatchSidebarItem';
-import { Dropzone } from './Dropzone';
-import type { BatchItem } from '../../types/batch';
+import { FiTrash2 } from "react-icons/fi";
+import { BatchSidebarItem } from "./BatchSidebarItem";
+import { Dropzone } from "./Dropzone";
+import type { BatchItem } from "../../types/batch";
 
 type Props = {
   items: BatchItem[];

@@ -1,6 +1,12 @@
-export type ProcessingPhase = 'idle' | 'download' | 'compute' | 'composite' | 'complete' | 'error';
+export type ProcessingPhase =
+  | "idle"
+  | "download"
+  | "compute"
+  | "composite"
+  | "complete"
+  | "error";
 
-export type PhaseStatus = 'pending' | 'active' | 'complete' | 'error';
+export type PhaseStatus = "pending" | "active" | "complete" | "error";
 
 export type ProcessingStats = {
   phase: ProcessingPhase;
@@ -15,12 +21,4 @@ export type ProcessingStats = {
     total?: number;
   };
   error?: string;
-};
-
-export type PhaseInfo = {
-  id: ProcessingPhase;
-  label: string;
-  status: PhaseStatus;
-  time?: number;
-  progress?: number;
 };
