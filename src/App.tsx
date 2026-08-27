@@ -12,6 +12,7 @@ import {
   deviceMemoryTier,
   recommendedQualityTier,
 } from "./lib/capabilities";
+import { selectedModelId } from "./lib/models";
 import { announcePortfolioReady } from "./lib/portfolioEmbed";
 import { useKeyboardShortcuts } from "./lib/shortcuts";
 import { useBatchProcessor } from "./hooks/useBatchProcessor";
@@ -614,11 +615,8 @@ export default function App() {
                               <FiCpu className="h-3 w-3 text-slate-400" />
                             )}
                             <span className="font-mono">
-                              {quality === "pro"
-                                ? "isnet_fp16"
-                                : quality === "fast"
-                                  ? "isnet_quint8"
-                                  : "isnet"}
+                              {processingStats.modelName ??
+                                selectedModelId(quality)}
                             </span>
                             <span className="text-slate-500">·</span>
                             <span className="text-slate-400">

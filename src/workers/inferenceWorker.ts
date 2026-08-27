@@ -1,18 +1,32 @@
 import { removeBackground } from "@imgly/background-removal";
+import {
+  hasWebGPU,
+  isBirefnetDisabled,
+  markBirefnetDisabled,
+  removeBackgroundBirefnet,
+} from "../lib/birefnet";
 import { refineAlphaEdges } from "../lib/image";
+import {
+  BALANCED_MODEL_ID,
+  BIREFNET_MODEL_ID,
+  imglyModelForTier,
+  type ImglyModel,
+  type QualityTier,
+} from "../lib/models";
 
-// Phase detection helpers - the library sends phases like 'fetch:/models/isnet' and 'compute:inference'
 const isDownloadPhase = (phase: string) => phase.startsWith("fetch:");
 const isComputePhase = (phase: string) => phase.startsWith("compute:");
 const imglyPublicPath = import.meta.env.VITE_IMGLY_PUBLIC_PATH as
   | string
   | undefined;
 
+type DevicePreference = "auto" | "gpu" | "cpu";
+
 type InitMessage = {
   id: string;
   type: "init";
   payload: {
-    tier: "fast" | "quality" | "pro";
+    tier: QualityTier;
     preferFp16: boolean;
     refineEdgesDefault: boolean;
   };
@@ -24,13 +38,13 @@ type ProcessMessage = {
   payload: {
     image: { kind: "blob"; mime: string; bytes: ArrayBuffer };
     options: {
-      tier: "fast" | "quality" | "pro";
+      tier: QualityTier;
       refineEdges: boolean;
       bgMode: "transparent" | "color" | "image";
       bgColor: string;
       bgImageBytes?: ArrayBuffer;
       exportFormat: "png" | "webp";
-      device?: "auto" | "gpu" | "cpu";
+      device?: DevicePreference;
     };
   };
 };
@@ -38,6 +52,15 @@ type ProcessMessage = {
 type DisposeMessage = { id: string; type: "dispose" };
 
 type Message = InitMessage | ProcessMessage | DisposeMessage;
+
+type ProgressPayload = {
+  phase: string;
+  message: string;
+  loaded?: number;
+  total?: number;
+  modelName?: string;
+  timings?: { download?: number; inference?: number; composite?: number };
+};
 
 self.onmessage = async (event: MessageEvent<Message>) => {
   const { id, type } = event.data;
@@ -64,11 +87,41 @@ self.onmessage = async (event: MessageEvent<Message>) => {
   const t0 = performance.now();
   const processId = id;
 
-  // Phase timing tracking
   const timings: { download?: number; inference?: number; composite?: number } =
     {};
   let phaseStart = t0;
-  let currentPhase = ""; // Will be set by first progress callback
+  let currentPhase = "";
+
+  const postProgress = (payload: ProgressPayload) => {
+    postMessage({
+      id: processId,
+      type: "progress",
+      payload: { ...payload, timings: { ...timings } },
+    });
+  };
+
+  const trackPhase = (phase: string) => {
+    const wasDownload =
+      isDownloadPhase(currentPhase) || currentPhase === "download";
+    const wasCompute =
+      isComputePhase(currentPhase) || currentPhase === "compute";
+    const isDownload = isDownloadPhase(phase) || phase === "download";
+    const isCompute = isComputePhase(phase) || phase === "compute";
+    const phaseTypeChanged =
+      currentPhase !== "" &&
+      (wasDownload !== isDownload || wasCompute !== isCompute);
+
+    if (phaseTypeChanged) {
+      const now = performance.now();
+      if (wasDownload) {
+        timings.download = Math.round(now - phaseStart);
+      } else if (wasCompute) {
+        timings.inference = Math.round(now - phaseStart);
+      }
+      phaseStart = now;
+    }
+    currentPhase = phase;
+  };
 
   try {
     const bytes = new Uint8Array(event.data.payload.image.bytes);
@@ -76,88 +129,78 @@ self.onmessage = async (event: MessageEvent<Message>) => {
 
     const tier = event.data.payload.options.tier;
     const device = event.data.payload.options.device || "auto";
-    const model: "isnet" | "isnet_fp16" | "isnet_quint8" =
-      tier === "pro"
-        ? "isnet_fp16"
-        : tier === "fast"
-          ? "isnet_quint8"
-          : "isnet";
+    const webgpu = await hasWebGPU();
+    const imglyDevice = resolveImglyDevice(device, webgpu);
 
-    postMessage({
-      id: processId,
-      type: "progress",
-      payload: { phase: "download", message: "Preparing…", modelName: model },
+    let modelName =
+      tier === "pro" ? BIREFNET_MODEL_ID : imglyModelForTier(tier);
+    const canAttemptBirefnet =
+      tier === "pro" && device !== "cpu" && webgpu && !isBirefnetDisabled();
+
+    postProgress({
+      phase: "download",
+      message: canAttemptBirefnet
+        ? "Preparing…"
+        : tier === "pro"
+          ? "Pro unavailable — using Balanced…"
+          : "Preparing…",
+      modelName: canAttemptBirefnet
+        ? BIREFNET_MODEL_ID
+        : imglyModelForTier(tier),
     });
 
-    // Map device preference to library config.
-    // @imgly/background-removal uses 'gpu' | 'cpu' | undefined (auto).
-    const deviceConfig = device === "auto" ? undefined : device;
-
-    let lastProgress = 0;
-    const resultBlob = await removeBackground(blob, {
-      ...(imglyPublicPath ? { publicPath: imglyPublicPath } : {}),
-      model,
-      device: deviceConfig,
-      output: { format: "image/png" },
-      progress: (phase: string, loaded: number, total: number) => {
-        const pct = total > 0 ? (loaded / total) * 100 : 0;
-
-        // Track phase transitions for timing.
-        const wasDownload = isDownloadPhase(currentPhase);
-        const wasCompute = isComputePhase(currentPhase);
-        const isDownload = isDownloadPhase(phase);
-        const isCompute = isComputePhase(phase);
-        const phaseTypeChanged =
-          wasDownload !== isDownload || wasCompute !== isCompute;
-
-        if (phaseTypeChanged) {
-          const now = performance.now();
-          if (wasDownload) {
-            timings.download = Math.round(now - phaseStart);
-          } else if (wasCompute) {
-            timings.inference = Math.round(now - phaseStart);
-          }
-          phaseStart = now;
-        }
-        currentPhase = phase;
-
-        if (Math.abs(pct - lastProgress) > 2 || !isDownload) {
-          lastProgress = pct;
-          postMessage({
-            id: processId,
-            type: "progress",
-            payload: {
-              phase,
-              message: isDownload
-                ? `Downloading model ${Math.round(pct)}%`
-                : isCompute
-                  ? "Processing image…"
-                  : "Processing…",
-              loaded,
-              total,
-              modelName: model,
-              timings: { ...timings },
-            },
+    let resultBlob: Blob;
+    if (canAttemptBirefnet) {
+      try {
+        resultBlob = await removeBackgroundBirefnet(blob, (info) => {
+          trackPhase(info.phase);
+          postProgress({
+            ...info,
+            modelName: BIREFNET_MODEL_ID,
           });
+        });
+        modelName = BIREFNET_MODEL_ID;
+      } catch (err) {
+        if (!isDownloadFailure(err)) {
+          markBirefnetDisabled();
         }
-      },
-    });
+        modelName = BALANCED_MODEL_ID;
+        postProgress({
+          phase: "download",
+          message: `Pro failed — falling back to Balanced (${errorMessage(err)})`,
+          modelName,
+        });
+        resultBlob = await runImgly(
+          blob,
+          BALANCED_MODEL_ID,
+          imglyDevice === "cpu" ? "gpu" : imglyDevice,
+          (info) => {
+            trackPhase(info.phase);
+            postProgress({ ...info, modelName });
+          },
+        );
+      }
+    } else {
+      const imglyModel = imglyModelForTier(tier);
+      modelName = imglyModel;
+      resultBlob = await runImgly(blob, imglyModel, imglyDevice, (info) => {
+        trackPhase(info.phase);
+        postProgress({ ...info, modelName });
+      });
+    }
 
-    // Track compute phase end if still in compute
-    if (isComputePhase(currentPhase)) {
+    if (isComputePhase(currentPhase) || currentPhase === "compute") {
       timings.inference = Math.round(performance.now() - phaseStart);
+      phaseStart = performance.now();
+    } else if (isDownloadPhase(currentPhase) || currentPhase === "download") {
+      timings.download = Math.round(performance.now() - phaseStart);
       phaseStart = performance.now();
     }
 
-    postMessage({
-      id: processId,
-      type: "progress",
-      payload: {
-        phase: "composite",
-        message: "Compositing…",
-        modelName: model,
-        timings: { ...timings },
-      },
+    postProgress({
+      phase: "composite",
+      message: "Compositing…",
+      modelName,
     });
 
     const bitmap = await createImageBitmap(resultBlob);
@@ -205,7 +248,6 @@ self.onmessage = async (event: MessageEvent<Message>) => {
     const exportBlob = await canvas.convertToBlob({ type: exportMime });
     const processed = await exportBlob.arrayBuffer();
 
-    // Track composite time
     timings.composite = Math.round(performance.now() - phaseStart);
     const totalMs = Math.round(performance.now() - t0);
 
@@ -217,7 +259,7 @@ self.onmessage = async (event: MessageEvent<Message>) => {
         width: canvas.width,
         height: canvas.height,
         timingMs: totalMs,
-        modelName: model,
+        modelName,
         timings: { ...timings, total: totalMs },
       },
     };
@@ -231,7 +273,65 @@ self.onmessage = async (event: MessageEvent<Message>) => {
     postMessage({
       id: processId,
       type: "error",
-      payload: { message: (err as Error).message },
+      payload: { message: errorMessage(err) },
     });
   }
 };
+
+function resolveImglyDevice(
+  device: DevicePreference,
+  webgpu: boolean,
+): "gpu" | "cpu" {
+  if (device === "cpu") return "cpu";
+  if (device === "gpu") return "gpu";
+  return webgpu ? "gpu" : "cpu";
+}
+
+async function runImgly(
+  blob: Blob,
+  model: ImglyModel,
+  device: "gpu" | "cpu",
+  onProgress: (info: {
+    phase: string;
+    message: string;
+    loaded?: number;
+    total?: number;
+  }) => void,
+): Promise<Blob> {
+  let lastProgress = 0;
+  return removeBackground(blob, {
+    ...(imglyPublicPath ? { publicPath: imglyPublicPath } : {}),
+    model,
+    device,
+    output: { format: "image/png" },
+    progress: (phase: string, loaded: number, total: number) => {
+      const pct = total > 0 ? (loaded / total) * 100 : 0;
+      const isDownload = isDownloadPhase(phase);
+      const isCompute = isComputePhase(phase);
+      if (Math.abs(pct - lastProgress) > 2 || !isDownload) {
+        lastProgress = pct;
+        onProgress({
+          phase,
+          loaded,
+          total,
+          message: isDownload
+            ? `Downloading model ${Math.round(pct)}%`
+            : isCompute
+              ? "Processing image…"
+              : "Processing…",
+        });
+      }
+    },
+  });
+}
+
+function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
+function isDownloadFailure(err: unknown): boolean {
+  const message = errorMessage(err);
+  return /download BiRefNet|Failed to fetch|NetworkError|Load failed/i.test(
+    message,
+  );
+}

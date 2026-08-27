@@ -76,9 +76,9 @@ The app automatically detects your hardware and selects the optimal backend:
 
 | Tier | Model | Best For |
 |------|-------|----------|
-| Fast | Quantized (8-bit) | Older devices, quick previews |
-| Quality | Standard | Most images (default) |
-| Pro | FP16 | Complex images, fine details like hair |
+| Fast | `isnet_quint8` | Older devices, quick previews |
+| Balanced | `isnet_fp16` | Most images (default) |
+| Pro | BiRefNet Lite 512 FP16 | Fine details like hair; WebGPU, falls back to Balanced |
 
 The app recommends a tier based on your device's capabilities.
 

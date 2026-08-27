@@ -1,6 +1,7 @@
 import clsx from "clsx";
 import { Switch } from "@headlessui/react";
 import { FiAlertTriangle, FiCpu, FiZap } from "react-icons/fi";
+import { QUALITY_TIERS } from "../models";
 import { ColorPicker } from "./ColorPicker";
 import { Tooltip } from "./Tooltip";
 
@@ -36,38 +37,7 @@ type Props = {
   onDevice: (v: DevicePreference) => void;
 };
 
-const qualities: {
-  key: Quality;
-  label: string;
-  model: string;
-  size: string;
-  description: string;
-}[] = [
-  {
-    key: "fast",
-    label: "Fast",
-    model: "isnet_quint8",
-    size: "~5MB",
-    description:
-      "Lightweight quantized model. Quick results, slightly lower edge quality.",
-  },
-  {
-    key: "quality",
-    label: "Balanced",
-    model: "isnet",
-    size: "~40MB",
-    description:
-      "Balanced model for most images. Good quality with reasonable speed.",
-  },
-  {
-    key: "pro",
-    label: "Pro",
-    model: "isnet_fp16",
-    size: "~180MB",
-    description:
-      "High-precision model. Best for complex images with fine details like hair.",
-  },
-];
+const qualities = QUALITY_TIERS;
 
 const backendDescriptions: Record<string, string> = {
   "WebGPU FP16":
@@ -110,7 +80,10 @@ export function SettingsPanel({
 
   const getQualityWarning = (q: Quality): string | null => {
     if (q === capabilities.recommended) return null;
-    if (q === "pro" && !capabilities.fp16) return "May be slow without FP16";
+    if (q === "pro" && !capabilities.webgpu)
+      return "Needs WebGPU; falls back to Balanced";
+    if (q === "pro" && !capabilities.fp16)
+      return "May fall back to Balanced without FP16";
     if (q === "fast" && capabilities.webgpu)
       return "Lower quality than recommended";
     if (!capabilities.webgpu && q !== "fast")

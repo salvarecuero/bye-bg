@@ -20,7 +20,7 @@ npm run preview   # Preview production build
 
 - React 18 + TypeScript + Vite
 - Tailwind CSS for styling
-- ONNX Runtime Web for AI inference (via @imgly/background-removal)
+- ONNX Runtime Web for AI inference (`@imgly/background-removal` for IS-Net, direct WebGPU for BiRefNet Lite)
 - Web Workers for non-blocking inference
 
 ## Architecture
@@ -42,8 +42,8 @@ Main thread and worker use a request-response pattern with unique IDs:
 ### Quality Tiers
 
 - **Fast**: `isnet_quint8` model (quantized, for weak devices)
-- **Quality**: `isnet` or `isnet_fp16` (default, balanced)
-- **Pro**: `isnet_fp16` (highest quality, for high-end devices)
+- **Quality/Balanced**: `isnet_fp16` (default, stable IS-Net)
+- **Pro**: `birefnet_lite_512_fp16` (BiRefNet Lite 512 FP16 on WebGPU; falls back to Balanced)
 
 ### Image Pipeline
 

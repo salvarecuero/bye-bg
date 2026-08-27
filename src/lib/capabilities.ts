@@ -37,8 +37,8 @@ export function recommendedQualityTier({
 }): QualityTier {
   if (!webgpu || memoryTier === 0) return "fast";
 
-  // Keep the default conservative: `pro` pulls the largest model, so expose it as
-  // a manual upgrade instead of auto-downloading it on the first processing run.
+  // Keep the default conservative: `pro` downloads BiRefNet (~94MB) and needs
+  // WebGPU, so expose it as a manual upgrade instead of auto-selecting it.
   if (fp16 && memoryTier >= 2) return "quality";
 
   return "quality";
