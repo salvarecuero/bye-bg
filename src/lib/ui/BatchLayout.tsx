@@ -9,7 +9,6 @@ type Props = {
   isProcessing: boolean;
   completedCount: number;
   errorCount: number;
-  exportFormat: 'png' | 'webp';
   onAddFiles: (files: File[]) => void;
   onRemoveItem: (id: string) => void;
   onClearAll: () => void;
@@ -18,6 +17,8 @@ type Props = {
   onDownloadItem: (item: BatchItem) => void;
   onDownloadAll: () => void;
   onDownloadZip: () => void;
+  settingsDirty?: boolean;
+  onRerun: () => void;
 };
 
 export function BatchLayout({
@@ -27,7 +28,6 @@ export function BatchLayout({
   isProcessing,
   completedCount,
   errorCount,
-  exportFormat,
   onAddFiles,
   onRemoveItem,
   onClearAll,
@@ -36,10 +36,10 @@ export function BatchLayout({
   onDownloadItem,
   onDownloadAll,
   onDownloadZip,
+  settingsDirty = false,
+  onRerun
 }: Props) {
-  const selectedItem = selectedItemId
-    ? items.find((item) => item.id === selectedItemId) ?? null
-    : null;
+  const selectedItem = selectedItemId ? (items.find(item => item.id === selectedItemId) ?? null) : null;
 
   // Clear selection if selected item was removed
   if (selectedItemId && !selectedItem) {
@@ -67,12 +67,13 @@ export function BatchLayout({
           isProcessing={isProcessing}
           completedCount={completedCount}
           errorCount={errorCount}
-          exportFormat={exportFormat}
           onStartProcessing={onStartProcessing}
           onStopProcessing={onStopProcessing}
           onDownloadItem={onDownloadItem}
           onDownloadAll={onDownloadAll}
           onDownloadZip={onDownloadZip}
+          settingsDirty={settingsDirty}
+          onRerun={onRerun}
         />
       </div>
     </div>

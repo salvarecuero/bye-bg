@@ -15,10 +15,18 @@ export function BatchSidebarItem({ item, isSelected, onClick, onRemove }: Props)
   const isError = item.status === 'error';
 
   return (
-    <button
+    <div
+      role="button"
+      tabIndex={0}
       onClick={onClick}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onClick();
+        }
+      }}
       className={clsx(
-        'group flex items-center gap-2 rounded-xl p-1.5 xl:p-2 transition-all duration-150 text-left',
+        'group flex items-center gap-2 rounded-xl p-1.5 xl:p-2 transition-all duration-150 text-left cursor-pointer',
         'w-auto shrink-0 xl:w-full',
         isSelected && 'ring-2 ring-accent bg-accent/10',
         !isSelected && 'hover:bg-slate-800/50'
@@ -105,6 +113,6 @@ export function BatchSidebarItem({ item, isSelected, onClick, onRemove }: Props)
           <FiX className="h-3.5 w-3.5" />
         </button>
       )}
-    </button>
+    </div>
   );
 }

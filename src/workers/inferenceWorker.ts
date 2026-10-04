@@ -6,6 +6,7 @@ import {
   removeBackgroundBirefnet,
 } from "../lib/birefnet";
 import { refineAlphaEdges } from "../lib/image";
+import { clampPasses } from "../lib/processingLimits";
 import {
   BALANCED_MODEL_ID,
   BIREFNET_MODEL_ID,
@@ -45,6 +46,8 @@ type ProcessMessage = {
       bgImageBytes?: ArrayBuffer;
       exportFormat: "png" | "webp";
       device?: DevicePreference;
+      /** Inference passes (clamped 1–MAX_PASSES). */
+      passes?: number;
     };
   };
 };
@@ -125,10 +128,13 @@ self.onmessage = async (event: MessageEvent<Message>) => {
 
   try {
     const bytes = new Uint8Array(event.data.payload.image.bytes);
-    const blob = new Blob([bytes], { type: event.data.payload.image.mime });
+    const sourceBlob = new Blob([bytes], {
+      type: event.data.payload.image.mime,
+    });
 
     const tier = event.data.payload.options.tier;
     const device = event.data.payload.options.device || "auto";
+    const passes = clampPasses(event.data.payload.options.passes);
     const webgpu = await hasWebGPU();
     const imglyDevice = resolveImglyDevice(device, webgpu);
 
@@ -149,44 +155,78 @@ self.onmessage = async (event: MessageEvent<Message>) => {
         : imglyModelForTier(tier),
     });
 
-    let resultBlob: Blob;
-    if (canAttemptBirefnet) {
-      try {
-        resultBlob = await removeBackgroundBirefnet(blob, (info) => {
-          trackPhase(info.phase);
-          postProgress({
-            ...info,
-            modelName: BIREFNET_MODEL_ID,
-          });
-        });
-        modelName = BIREFNET_MODEL_ID;
-      } catch (err) {
-        if (!isDownloadFailure(err)) {
-          markBirefnetDisabled();
-        }
-        modelName = BALANCED_MODEL_ID;
+    const runPass = async (
+      input: Blob,
+      pass: number,
+    ): Promise<{ blob: Blob; model: string }> => {
+      const passLabel = passes > 1 ? `Pass ${pass}/${passes} — ` : "";
+      const onProgress = (info: {
+        phase: string;
+        message: string;
+        loaded?: number;
+        total?: number;
+      }, model: string) => {
+        trackPhase(info.phase);
         postProgress({
-          phase: "download",
-          message: `Pro failed — falling back to Balanced (${errorMessage(err)})`,
+          ...info,
+          message: `${passLabel}${info.message}`,
+          modelName: model,
+        });
+      };
+
+      // First pass may use BiRefNet; later passes re-run IS-Net on the cutout
+      // to clean residual background without repeating the heavy Pro model.
+      if (canAttemptBirefnet && pass === 1) {
+        try {
+          const blob = await removeBackgroundBirefnet(input, (info) =>
+            onProgress(
+              { ...info, message: info.message ?? "Processing…" },
+              BIREFNET_MODEL_ID,
+            ),
+          );
+          return { blob, model: BIREFNET_MODEL_ID };
+        } catch (err) {
+          if (!isDownloadFailure(err)) {
+            markBirefnetDisabled();
+          }
+          postProgress({
+            phase: "download",
+            message: `Pro failed — falling back to Balanced (${errorMessage(err)})`,
+            modelName: BALANCED_MODEL_ID,
+          });
+          const blob = await runImgly(
+            input,
+            BALANCED_MODEL_ID,
+            imglyDevice === "cpu" ? "gpu" : imglyDevice,
+            (info) => onProgress(info, BALANCED_MODEL_ID),
+          );
+          return { blob, model: BALANCED_MODEL_ID };
+        }
+      }
+
+      const imglyModel =
+        pass === 1 ? imglyModelForTier(tier) : BALANCED_MODEL_ID;
+      const blob = await runImgly(input, imglyModel, imglyDevice, (info) =>
+        onProgress(info, imglyModel),
+      );
+      return { blob, model: imglyModel };
+    };
+
+    let resultBlob: Blob = sourceBlob;
+    let inputBlob = sourceBlob;
+
+    for (let pass = 1; pass <= passes; pass++) {
+      const { blob, model } = await runPass(inputBlob, pass);
+      resultBlob = blob;
+      modelName = model;
+      if (pass < passes) {
+        inputBlob = resultBlob;
+        postProgress({
+          phase: "compute",
+          message: `Pass ${pass}/${passes} done — starting next…`,
           modelName,
         });
-        resultBlob = await runImgly(
-          blob,
-          BALANCED_MODEL_ID,
-          imglyDevice === "cpu" ? "gpu" : imglyDevice,
-          (info) => {
-            trackPhase(info.phase);
-            postProgress({ ...info, modelName });
-          },
-        );
       }
-    } else {
-      const imglyModel = imglyModelForTier(tier);
-      modelName = imglyModel;
-      resultBlob = await runImgly(blob, imglyModel, imglyDevice, (info) => {
-        trackPhase(info.phase);
-        postProgress({ ...info, modelName });
-      });
     }
 
     if (isComputePhase(currentPhase) || currentPhase === "compute") {

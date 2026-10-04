@@ -39,7 +39,7 @@ export const shortcuts: ShortcutConfig[] = [
     label: 'Reprocess',
     shortLabel: `${modKey}+Enter`,
     description: 'Reprocess the current image with new settings',
-    enabledWhen: s => !s.processing && s.hasCachedImage && s.hasOutput
+    enabledWhen: s => !s.processing && s.hasCachedImage
   },
   {
     id: 'upload',

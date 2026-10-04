@@ -1,7 +1,12 @@
 import clsx from "clsx";
 import { Switch } from "@headlessui/react";
-import { FiAlertTriangle, FiCpu, FiZap } from "react-icons/fi";
+import { FiAlertTriangle, FiCpu, FiMinus, FiPlus, FiZap } from "react-icons/fi";
 import { QUALITY_TIERS } from "../models";
+import {
+  clampPasses,
+  MAX_PASSES,
+  MIN_PASSES,
+} from "../processingLimits";
 import { ColorPicker } from "./ColorPicker";
 import { Tooltip } from "./Tooltip";
 
@@ -35,6 +40,8 @@ type Props = {
   capabilities: Capabilities;
   device: DevicePreference;
   onDevice: (v: DevicePreference) => void;
+  passes: number;
+  onPasses: (v: number) => void;
 };
 
 const qualities = QUALITY_TIERS;
@@ -75,8 +82,11 @@ export function SettingsPanel({
   capabilities,
   device,
   onDevice,
+  passes,
+  onPasses,
 }: Props) {
   const controlsDisabled = processing;
+  const safePasses = clampPasses(passes);
 
   const getQualityWarning = (q: Quality): string | null => {
     if (q === capabilities.recommended) return null;
@@ -263,6 +273,60 @@ export function SettingsPanel({
         </Switch>
       </div>
 
+      <div className="mt-4 flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-1">
+            <span className="text-sm text-white font-semibold">Passes</span>
+            <Tooltip
+              content={`Run the model up to ${MAX_PASSES} times on tough backgrounds. Extra passes re-process the cutout to clean leftovers. Higher values are slower.`}
+            />
+          </div>
+          <div className="text-xs text-slate-300">
+            Extra runs for stubborn backgrounds (max {MAX_PASSES})
+          </div>
+        </div>
+        <div className="flex items-center gap-1.5 shrink-0">
+          <button
+            type="button"
+            aria-label="Decrease passes"
+            disabled={controlsDisabled || safePasses <= MIN_PASSES}
+            onClick={() => onPasses(clampPasses(safePasses - 1))}
+            className={clsx(
+              "flex h-8 w-8 items-center justify-center rounded-lg border transition",
+              controlsDisabled || safePasses <= MIN_PASSES
+                ? "border-slate-700 text-slate-600 cursor-not-allowed"
+                : "border-slate-600 text-slate-200 hover:border-slate-400 hover:text-white",
+            )}
+          >
+            <FiMinus className="h-3.5 w-3.5" />
+          </button>
+          <input
+            type="number"
+            min={MIN_PASSES}
+            max={MAX_PASSES}
+            step={1}
+            value={safePasses}
+            disabled={controlsDisabled}
+            onChange={(e) => onPasses(clampPasses(e.target.value))}
+            className="h-8 w-12 rounded-lg border border-slate-600 bg-slate-900/60 text-center text-sm font-semibold text-white tabular-nums disabled:opacity-50 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+          />
+          <button
+            type="button"
+            aria-label="Increase passes"
+            disabled={controlsDisabled || safePasses >= MAX_PASSES}
+            onClick={() => onPasses(clampPasses(safePasses + 1))}
+            className={clsx(
+              "flex h-8 w-8 items-center justify-center rounded-lg border transition",
+              controlsDisabled || safePasses >= MAX_PASSES
+                ? "border-slate-700 text-slate-600 cursor-not-allowed"
+                : "border-slate-600 text-slate-200 hover:border-slate-400 hover:text-white",
+            )}
+          >
+            <FiPlus className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      </div>
+
       <div className="mt-4 space-y-3">
         <div className="text-sm text-slate-200 font-medium">Background</div>
         <div className="grid grid-cols-3 gap-3">
@@ -296,13 +360,18 @@ export function SettingsPanel({
 
         {/* Show upload only when Image is selected */}
         {bgMode === "image" && (
-          <button
-            onClick={onBgImageUpload}
-            disabled={controlsDisabled}
-            className="w-full rounded-xl border border-slate-600 bg-slate-900/40 px-3 py-2 text-sm text-slate-200 transition hover:border-accent hover:text-white"
-          >
-            Upload background image
-          </button>
+          <div className="space-y-2">
+            <button
+              onClick={onBgImageUpload}
+              disabled={controlsDisabled}
+              className="w-full rounded-xl border border-slate-600 bg-slate-900/40 px-3 py-2 text-sm text-slate-200 transition hover:border-accent hover:text-white"
+            >
+              Upload background image
+            </button>
+            <p className="text-[11px] text-slate-400">
+              Without an image, output stays transparent until you upload one.
+            </p>
+          </div>
         )}
       </div>
 

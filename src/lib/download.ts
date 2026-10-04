@@ -13,30 +13,24 @@ export function getOutputFilename(originalName: string, format: 'png' | 'webp'):
   return `${baseName}-bye-bg.${format}`;
 }
 
-export async function downloadBatchItem(item: BatchItem, format: 'png' | 'webp'): Promise<void> {
+export async function downloadBatchItem(item: BatchItem): Promise<void> {
   if (!item.result?.outputUrl) return;
 
-  const filename = getOutputFilename(item.originalName, format);
+  const filename = getOutputFilename(item.originalName, item.result.format);
   downloadFile(item.result.outputUrl, filename);
 }
 
-export async function downloadAllSeparate(
-  items: BatchItem[],
-  format: 'png' | 'webp'
-): Promise<void> {
+export async function downloadAllSeparate(items: BatchItem[]): Promise<void> {
   const completed = items.filter(item => item.status === 'completed' && item.result);
 
   for (const item of completed) {
-    await downloadBatchItem(item, format);
+    await downloadBatchItem(item);
     // Small delay to prevent browser blocking
     await new Promise(resolve => setTimeout(resolve, 150));
   }
 }
 
-export async function downloadAsZip(
-  items: BatchItem[],
-  format: 'png' | 'webp'
-): Promise<void> {
+export async function downloadAsZip(items: BatchItem[]): Promise<void> {
   const zip = new JSZip();
   const completed = items.filter(item => item.status === 'completed' && item.result);
 
@@ -48,13 +42,13 @@ export async function downloadAsZip(
   for (const item of completed) {
     if (!item.result?.outputBytes) continue;
 
-    let filename = getOutputFilename(item.originalName, format);
+    const ext = item.result.format;
+    let filename = getOutputFilename(item.originalName, ext);
 
     // Handle duplicate filenames
     if (usedFilenames.has(filename)) {
       let counter = 1;
       const baseName = filename.replace(/\.[^/.]+$/, '');
-      const ext = format;
       while (usedFilenames.has(`${baseName} (${counter}).${ext}`)) {
         counter++;
       }

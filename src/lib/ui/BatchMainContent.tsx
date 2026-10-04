@@ -10,12 +10,13 @@ type Props = {
   isProcessing: boolean;
   completedCount: number;
   errorCount: number;
-  exportFormat: 'png' | 'webp';
   onStartProcessing: () => void;
   onStopProcessing: () => void;
   onDownloadItem: (item: BatchItem) => void;
   onDownloadAll: () => void;
   onDownloadZip: () => void;
+  settingsDirty?: boolean;
+  onRerun: () => void;
 };
 
 export function BatchMainContent({
@@ -24,14 +25,15 @@ export function BatchMainContent({
   isProcessing,
   completedCount,
   errorCount,
-  exportFormat,
   onStartProcessing,
   onStopProcessing,
   onDownloadItem,
   onDownloadAll,
   onDownloadZip,
+  settingsDirty = false,
+  onRerun
 }: Props) {
-  const hasPending = items.some((i) => i.status === 'pending');
+  const hasPending = items.some(i => i.status === 'pending');
 
   // Show overview when no item is selected
   if (!selectedItem) {
@@ -42,6 +44,8 @@ export function BatchMainContent({
         errors={errorCount}
         isProcessing={isProcessing}
         hasPending={hasPending}
+        settingsDirty={settingsDirty}
+        onRerun={onRerun}
         onStartProcessing={onStartProcessing}
         onStopProcessing={onStopProcessing}
         onDownloadAll={onDownloadAll}
@@ -65,9 +69,7 @@ export function BatchMainContent({
           </div>
           <div className="text-xs text-slate-400">
             {isItemProcessing && 'Processing...'}
-            {isItemCompleted &&
-              selectedItem.result &&
-              `${selectedItem.result.width} × ${selectedItem.result.height}`}
+            {isItemCompleted && selectedItem.result && `${selectedItem.result.width} × ${selectedItem.result.height}`}
             {isItemError && 'Processing failed'}
             {selectedItem.status === 'pending' && 'Waiting to process'}
           </div>
@@ -77,27 +79,19 @@ export function BatchMainContent({
         <div
           className={clsx(
             'flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs border',
-            isItemProcessing &&
-              'bg-amber-500/15 border-amber-500/30 text-amber-400',
-            isItemCompleted &&
-              'bg-emerald-500/15 border-emerald-500/30 text-emerald-400',
+            isItemProcessing && 'bg-amber-500/15 border-amber-500/30 text-amber-400',
+            isItemCompleted && 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400',
             isItemError && 'bg-red-500/15 border-red-500/30 text-red-400',
-            selectedItem.status === 'pending' &&
-              'bg-slate-800/90 border-slate-700/50 text-slate-400'
+            selectedItem.status === 'pending' && 'bg-slate-800/90 border-slate-700/50 text-slate-400'
           )}
         >
           {isItemCompleted && <FiCheck className="h-3 w-3" />}
           {isItemError && <FiAlertTriangle className="h-3 w-3" />}
-          {isItemProcessing && (
-            <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />
-          )}
-          {selectedItem.status === 'pending' && (
-            <span className="h-1.5 w-1.5 rounded-full bg-slate-500" />
-          )}
+          {isItemProcessing && <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />}
+          {selectedItem.status === 'pending' && <span className="h-1.5 w-1.5 rounded-full bg-slate-500" />}
           {selectedItem.status === 'pending' && 'Pending'}
           {isItemProcessing && 'Processing'}
-          {isItemCompleted &&
-            `${((selectedItem.result?.timingMs || 0) / 1000).toFixed(1)}s`}
+          {isItemCompleted && `${((selectedItem.result?.timingMs || 0) / 1000).toFixed(1)}s`}
           {isItemError && 'Error'}
         </div>
       </div>
@@ -108,6 +102,8 @@ export function BatchMainContent({
           beforeUrl={selectedItem.thumbnailUrl}
           afterUrl={selectedItem.result?.outputUrl}
           processing={isItemProcessing}
+          outdated={settingsDirty && isItemCompleted}
+          onRegenerate={onRerun}
         />
       </div>
 
@@ -134,11 +130,15 @@ export function BatchMainContent({
         )}
 
         {/* Single item download */}
-        {isItemCompleted && (
+        {isItemCompleted && selectedItem.result && (
           <button
             onClick={() => onDownloadItem(selectedItem)}
             className="flex items-center gap-2 rounded-xl bg-accent px-4 py-2 text-sm font-semibold text-white transition hover:bg-accentHover shadow-glow-sm hover:shadow-glow"
-            title={`Download as ${exportFormat.toUpperCase()}`}
+            title={
+              settingsDirty
+                ? "Uses the previous result — current settings aren't applied yet"
+                : `Download as ${selectedItem.result.format.toUpperCase()}`
+            }
           >
             <FiDownload className="h-4 w-4" />
             Download

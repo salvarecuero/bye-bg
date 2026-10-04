@@ -13,6 +13,17 @@ import {
   recommendedQualityTier,
 } from "./lib/capabilities";
 import { selectedModelId } from "./lib/models";
+import { createId } from "./lib/id";
+import {
+  clampPasses,
+  DEFAULT_PASSES,
+  MAX_BATCH_ITEMS,
+} from "./lib/processingLimits";
+import {
+  buildSettingsFingerprint,
+  settingsEqual,
+  type SettingsFingerprint,
+} from "./lib/settingsFingerprint";
 import { announcePortfolioReady } from "./lib/portfolioEmbed";
 import { useKeyboardShortcuts } from "./lib/shortcuts";
 import { useBatchProcessor } from "./hooks/useBatchProcessor";
@@ -74,14 +85,17 @@ export default function App() {
   const worker = useInferenceWorker();
   const [quality, setQuality] = useState<"fast" | "quality" | "pro">("quality");
   const [refine, setRefine] = useState(true);
+  const [passes, setPasses] = useState(DEFAULT_PASSES);
   const [bgMode, setBgMode] = useState<"transparent" | "color" | "image">(
     "transparent",
   );
   const [bgColor, setBgColor] = useState("#0ea5e9");
   const [bgImageBytes, setBgImageBytes] = useState<ArrayBuffer>();
+  const [bgImageVersion, setBgImageVersion] = useState(0);
   const [exportFmt, setExportFmt] = useState<"png" | "webp">("png");
   const [inputUrl, setInputUrl] = useState<string>();
   const [outputUrl, setOutputUrl] = useState<string>();
+  const [outputFormat, setOutputFormat] = useState<"png" | "webp">("png");
   const [processing, setProcessing] = useState(false);
   const [processingStats, setProcessingStats] = useState<ProcessingStats>({
     phase: "idle",
@@ -102,6 +116,10 @@ export default function App() {
     recommended: "fast" | "quality" | "pro";
   }>({ webgpu: false, fp16: false, recommended: "quality" });
   const [device, setDevice] = useState<"auto" | "gpu" | "cpu">("auto");
+  const [appliedSettings, setAppliedSettings] =
+    useState<SettingsFingerprint | null>(null);
+  const [batchAppliedSettings, setBatchAppliedSettings] =
+    useState<SettingsFingerprint | null>(null);
 
   // Batch mode state
   const [batchMode, setBatchMode] = useState(false);
@@ -113,6 +131,30 @@ export default function App() {
   // File input ref for keyboard shortcut
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const currentSettings = useMemo(
+    () =>
+      buildSettingsFingerprint({
+        quality,
+        refine,
+        bgMode,
+        bgColor,
+        bgImageVersion,
+        exportFormat: exportFmt,
+        device,
+        passes: clampPasses(passes),
+      }),
+    [
+      quality,
+      refine,
+      bgMode,
+      bgColor,
+      bgImageVersion,
+      exportFmt,
+      device,
+      passes,
+    ],
+  );
+
   // Batch processor
   const batchProcessor = useBatchProcessor(worker, {
     tier: quality,
@@ -122,6 +164,7 @@ export default function App() {
     bgImageBytes,
     exportFormat: exportFmt,
     device,
+    passes: clampPasses(passes),
   });
 
   useEffect(() => {
@@ -166,99 +209,134 @@ export default function App() {
   }, [device, capabilities, modelStatus]);
 
   const currentRequestId = useRef<string | null>(null);
+  const requestFormatRef = useRef<"png" | "webp">("png");
 
   useEffect(() => {
     const w = worker.current;
     if (!w) return;
-    w.postMessage({
-      id: "init",
-      type: "init",
-      payload: { tier: quality, preferFp16: true, refineEdgesDefault: refine },
-    });
     const onMessage = (event: MessageEvent<WorkerMessage>) => {
       const msg = event.data;
-
-      // Skip batch messages (handled by useBatchProcessor)
-      if (
-        batchMode &&
-        msg.id !== currentRequestId.current &&
-        msg.id !== "init"
-      ) {
-        return;
-      }
+      // Batch requests are handled by useBatchProcessor
+      if (msg.id !== currentRequestId.current) return;
 
       if (msg.type === "progress") {
-        if (msg.id === currentRequestId.current || msg.id === "init") {
-          const pct =
-            msg.payload.loaded != null &&
-            msg.payload.total != null &&
-            msg.payload.total > 0
-              ? (msg.payload.loaded / msg.payload.total) * 100
-              : undefined;
+        const pct =
+          msg.payload.loaded != null &&
+          msg.payload.total != null &&
+          msg.payload.total > 0
+            ? (msg.payload.loaded / msg.payload.total) * 100
+            : undefined;
 
-          setProcessingStats((prev) => ({
-            ...prev,
-            phase: (msg.payload.phase === "init"
-              ? "idle"
-              : msg.payload.phase) as ProcessingPhase,
-            progress: pct ?? prev.progress,
-            message: msg.payload.message ?? prev.message,
-            modelName: msg.payload.modelName ?? prev.modelName,
-            timings: msg.payload.timings ?? prev.timings,
-          }));
-        }
+        setProcessingStats((prev) => ({
+          ...prev,
+          phase: msg.payload.phase as ProcessingPhase,
+          progress: pct ?? prev.progress,
+          message: msg.payload.message ?? prev.message,
+          modelName: msg.payload.modelName ?? prev.modelName,
+          timings: msg.payload.timings ?? prev.timings,
+        }));
       } else if (msg.type === "result") {
-        if (msg.id === currentRequestId.current) {
-          const bytes = new Uint8Array(msg.payload.rgbaPngBytes);
-          const blob = new Blob([bytes], {
-            type: exportFmt === "webp" ? "image/webp" : "image/png",
-          });
-          const url = URL.createObjectURL(blob);
-          setOutputUrl((prev) => {
-            if (prev) URL.revokeObjectURL(prev);
-            return url;
-          });
-          setProcessing(false);
-          setProcessingStats({
-            phase: "complete",
-            progress: 100,
-            message: `Processed in ${(msg.payload.timingMs / 1000).toFixed(2)}s`,
-            modelName: msg.payload.modelName,
-            dimensions: {
-              width: msg.payload.width,
-              height: msg.payload.height,
-            },
-            timings: msg.payload.timings,
-          });
-          currentRequestId.current = null;
-        }
+        const format = requestFormatRef.current;
+        const blob = new Blob([new Uint8Array(msg.payload.rgbaPngBytes)], {
+          type: format === "webp" ? "image/webp" : "image/png",
+        });
+        const url = URL.createObjectURL(blob);
+        setOutputUrl((prev) => {
+          if (prev) URL.revokeObjectURL(prev);
+          return url;
+        });
+        setOutputFormat(format);
+        setProcessing(false);
+        setProcessingStats({
+          phase: "complete",
+          progress: 100,
+          message: `Processed in ${(msg.payload.timingMs / 1000).toFixed(2)}s`,
+          modelName: msg.payload.modelName,
+          dimensions: {
+            width: msg.payload.width,
+            height: msg.payload.height,
+          },
+          timings: msg.payload.timings,
+        });
+        currentRequestId.current = null;
       } else if (msg.type === "error") {
-        if (msg.id === currentRequestId.current) {
-          setProcessingStats((prev) => ({
-            ...prev,
-            phase: "error",
-            message: msg.payload.message,
-            error: msg.payload.message,
-          }));
-          setProcessing(false);
-          currentRequestId.current = null;
-        }
+        setProcessingStats((prev) => ({
+          ...prev,
+          phase: "error",
+          message: msg.payload.message,
+          error: msg.payload.message,
+        }));
+        setProcessing(false);
+        currentRequestId.current = null;
       }
     };
     w.addEventListener("message", onMessage);
     return () => w.removeEventListener("message", onMessage);
-  }, [worker, exportFmt, batchMode, quality, refine]);
+  }, [worker]);
+
+  const startSingleProcess = useCallback(
+    (image: { bytes: ArrayBuffer; mime: string }, message = "Starting…") => {
+      if (!worker.current) return;
+      const requestId = createId();
+      currentRequestId.current = requestId;
+      requestFormatRef.current = exportFmt;
+      setProcessing(true);
+      setAppliedSettings(currentSettings);
+      setProcessingStats({
+        phase: "download",
+        progress: 0,
+        message,
+      });
+      const imageBytes = image.bytes.slice(0);
+      const bgBytes = bgImageBytes?.slice(0);
+      const transfer: Transferable[] = [imageBytes];
+      if (bgBytes) transfer.push(bgBytes);
+
+      worker.current.postMessage(
+        {
+          id: requestId,
+          type: "process",
+          payload: {
+            image: { kind: "blob", mime: image.mime, bytes: imageBytes },
+            options: {
+              tier: quality,
+              refineEdges: refine,
+              bgMode: bgBytes ? "image" : bgMode,
+              bgColor,
+              bgImageBytes: bgBytes,
+              exportFormat: exportFmt,
+              device,
+              passes: clampPasses(passes),
+            },
+          },
+        },
+        transfer,
+      );
+    },
+    [
+      worker,
+      currentSettings,
+      bgImageBytes,
+      quality,
+      refine,
+      bgMode,
+      bgColor,
+      exportFmt,
+      device,
+      passes,
+    ],
+  );
 
   const handleFile = async (file: File) => {
     // Switch to single mode if in batch mode
     if (batchMode) {
       setBatchMode(false);
       batchProcessor.clearAll();
+      setBatchAppliedSettings(null);
     }
 
     const imageBytes = await file.arrayBuffer();
     const cachedBytes = imageBytes.slice(0);
-    const bgBytes = bgImageBytes?.slice(0);
     setCachedImage({ bytes: cachedBytes, mime: file.type });
     const url = URL.createObjectURL(
       new Blob([cachedBytes], { type: file.type }),
@@ -267,41 +345,15 @@ export default function App() {
       if (prev) URL.revokeObjectURL(prev);
       return url;
     });
-    setOutputUrl(undefined);
+    setOutputUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return undefined;
+    });
     setProcessing(false);
     setProcessingStats({ phase: "idle", progress: 0, message: "" });
+    setAppliedSettings(null);
 
-    if (!worker.current) return;
-    const requestId = crypto.randomUUID();
-    currentRequestId.current = requestId;
-    setProcessing(true);
-    setProcessingStats({
-      phase: "download",
-      progress: 0,
-      message: "Starting…",
-    });
-    const transfer: Transferable[] = [imageBytes];
-    if (bgBytes) transfer.push(bgBytes);
-
-    worker.current.postMessage(
-      {
-        id: requestId,
-        type: "process",
-        payload: {
-          image: { kind: "blob", mime: file.type, bytes: imageBytes },
-          options: {
-            tier: quality,
-            refineEdges: refine,
-            bgMode: bgBytes ? "image" : bgMode,
-            bgColor,
-            bgImageBytes: bgBytes,
-            exportFormat: exportFmt,
-            device,
-          },
-        },
-      },
-      transfer,
-    );
+    startSingleProcess({ bytes: cachedBytes, mime: file.type });
   };
 
   const handleFiles = (files: File[]) => {
@@ -320,55 +372,32 @@ export default function App() {
         return undefined;
       });
       setCachedImage(undefined);
+      setAppliedSettings(null);
       setProcessingStats({ phase: "idle", progress: 0, message: "" });
-
-      batchProcessor.addFiles(files);
+      setBatchAppliedSettings(currentSettings);
+      void batchProcessor.addFiles(files, { autoStart: true }).then(() => {
+        // Belt-and-suspenders: ensure queue starts after batch mode commits
+        batchProcessor.startProcessing();
+      });
     }
   };
 
-  const reprocess = () => {
-    if (!cachedImage || !worker.current) return;
-    setOutputUrl((prev) => {
-      if (prev) URL.revokeObjectURL(prev);
-      return undefined;
-    });
-    const requestId = crypto.randomUUID();
-    currentRequestId.current = requestId;
-    setProcessing(true);
-    setProcessingStats({
-      phase: "download",
-      progress: 0,
-      message: "Reprocessing…",
-    });
-    const imageBytes = cachedImage.bytes.slice(0);
-    const bgBytes = bgImageBytes?.slice(0);
-    const transfer: Transferable[] = [imageBytes];
-    if (bgBytes) transfer.push(bgBytes);
+  // Keeps the previous result on screen (dimmed) until the new one lands.
+  const reprocess = useCallback(() => {
+    if (!cachedImage || !worker.current || processing) return;
+    startSingleProcess(cachedImage, "Reprocessing…");
+  }, [cachedImage, worker, processing, startSingleProcess]);
 
-    worker.current.postMessage(
-      {
-        id: requestId,
-        type: "process",
-        payload: {
-          image: {
-            kind: "blob",
-            mime: cachedImage.mime,
-            bytes: imageBytes,
-          },
-          options: {
-            tier: quality,
-            refineEdges: refine,
-            bgMode: bgBytes ? "image" : bgMode,
-            bgColor,
-            bgImageBytes: bgBytes,
-            exportFormat: exportFmt,
-            device,
-          },
-        },
-      },
-      transfer,
-    );
-  };
+  const handleBatchStart = useCallback(() => {
+    setBatchAppliedSettings(currentSettings);
+    batchProcessor.startProcessing();
+  }, [batchProcessor, currentSettings]);
+
+  const handleBatchRerun = useCallback(() => {
+    batchProcessor.requeueForNewSettings();
+    setBatchAppliedSettings(currentSettings);
+    batchProcessor.startProcessing();
+  }, [batchProcessor, currentSettings]);
 
   const bgInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -380,16 +409,21 @@ export default function App() {
     const file = e.target.files?.[0];
     if (!file) return;
     setBgImageBytes(await file.arrayBuffer());
+    setBgImageVersion((v) => v + 1);
     setBgMode("image");
   };
+
+  const handlePasses = useCallback((value: number) => {
+    setPasses(clampPasses(value));
+  }, []);
 
   const handleDownload = useCallback(() => {
     if (!outputUrl) return;
     const link = document.createElement("a");
     link.href = outputUrl;
-    link.download = `bye-bg.${exportFmt === "webp" ? "webp" : "png"}`;
+    link.download = `bye-bg.${outputFormat}`;
     link.click();
-  }, [outputUrl, exportFmt]);
+  }, [outputUrl, outputFormat]);
 
   const handleCopyToClipboard = useCallback(async () => {
     if (!outputUrl) return;
@@ -412,7 +446,9 @@ export default function App() {
       return undefined;
     });
     setBgImageBytes(undefined);
+    setBgImageVersion(0);
     setCachedImage(undefined);
+    setAppliedSettings(null);
     setProcessing(false);
     setProcessingStats({ phase: "idle", progress: 0, message: "" });
 
@@ -421,6 +457,7 @@ export default function App() {
       batchProcessor.clearAll();
       setBatchMode(false);
       setSelectedBatchItemId(null);
+      setBatchAppliedSettings(null);
     }
   }, [batchMode, batchProcessor]);
 
@@ -462,11 +499,26 @@ export default function App() {
     disabled: processing,
   });
 
+  const hasError = processingStats.phase === "error";
+  const settingsDirty =
+    !!cachedImage &&
+    !processing &&
+    !!appliedSettings &&
+    !settingsEqual(appliedSettings, currentSettings);
+
+  const batchSettingsDirty =
+    batchMode &&
+    !batchProcessor.isProcessing &&
+    (batchProcessor.completedCount > 0 || batchProcessor.errorCount > 0) &&
+    !!batchAppliedSettings &&
+    !settingsEqual(batchAppliedSettings, currentSettings);
+
   const statusLabel = useMemo(() => {
-    if (processing) return processingStats.message || "Processing…";
+    if (processing) return "Processing";
+    if (hasError) return "Error";
     if (outputUrl) return "Done";
     return "Idle";
-  }, [processing, processingStats.message, outputUrl]);
+  }, [processing, outputUrl, hasError]);
 
   const isAnyProcessing = processing || batchProcessor.isProcessing;
 
@@ -475,35 +527,24 @@ export default function App() {
       {...getRootProps()}
       className="h-screen overflow-hidden bg-[#0b1221] flex flex-col relative"
     >
-      {/* Full-screen drop overlay */}
-      <div
-        className={clsx(
-          "fixed inset-0 z-40 flex items-center justify-center pointer-events-none",
-          "transition-all duration-200",
-          isDragActive ? "opacity-100" : "opacity-0",
-        )}
-      >
-        <div
-          className={clsx(
-            "absolute inset-4 rounded-3xl border-2 border-dashed",
-            "bg-black/60 backdrop-blur-md",
-            "flex flex-col items-center justify-center gap-4",
-            isDragActive ? "border-accent shadow-glow" : "border-transparent",
-          )}
-        >
-          <div className="rounded-full bg-accent/20 p-6">
-            <FiUploadCloud className="h-16 w-16 text-accent" />
-          </div>
-          <div className="text-center">
-            <div className="text-2xl font-semibold text-white">
-              Drop images here
+      {/* Full-screen drop overlay — mounted only while dragging so its blur costs nothing otherwise */}
+      {isDragActive && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center pointer-events-none">
+          <div className="absolute inset-4 rounded-3xl border-2 border-dashed border-accent shadow-glow bg-black/70 backdrop-blur-md flex flex-col items-center justify-center gap-4">
+            <div className="rounded-full bg-accent/20 p-6">
+              <FiUploadCloud className="h-16 w-16 text-accent" />
             </div>
-            <div className="mt-1 text-sm text-slate-400">
-              Release to remove backgrounds
+            <div className="text-center">
+              <div className="text-2xl font-semibold text-white">
+                Drop images here
+              </div>
+              <div className="mt-1 text-sm text-slate-400">
+                Release to remove backgrounds
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      )}
 
       <div className="flex-1 flex flex-col overflow-y-auto px-4 py-6 md:px-10 md:py-8">
         {/* Screen reader announcer */}
@@ -545,44 +586,61 @@ export default function App() {
             </a>
           </header>
 
-          {/* Main content - vertically centered */}
-          <div className="flex-1 flex items-center">
+          {/* Main content — top-aligned on small screens so settings aren't clipped */}
+          <div className="flex-1 flex items-start lg:items-center py-2">
             <div
               className={clsx(
                 "grid w-full gap-4 lg:gap-5 lg:grid-cols-[3fr,2fr] xl:grid-cols-[2fr,1fr]",
-                batchMode && "items-center",
+                batchMode && "lg:items-center",
               )}
             >
               <div className="space-y-4 min-w-0">
                 {/* Show Dropzone or BatchLayout based on mode */}
                 {batchMode ? (
-                  <BatchLayout
-                    items={batchProcessor.items}
-                    selectedItemId={selectedBatchItemId}
-                    onSelectItem={setSelectedBatchItemId}
-                    isProcessing={batchProcessor.isProcessing}
-                    completedCount={batchProcessor.completedCount}
-                    errorCount={batchProcessor.errorCount}
-                    exportFormat={exportFmt}
-                    onAddFiles={batchProcessor.addFiles}
-                    onRemoveItem={batchProcessor.removeItem}
-                    onClearAll={() => {
-                      batchProcessor.clearAll();
-                      setBatchMode(false);
-                      setSelectedBatchItemId(null);
-                    }}
-                    onStartProcessing={batchProcessor.startProcessing}
-                    onStopProcessing={batchProcessor.stopProcessing}
-                    onDownloadItem={(item) =>
-                      downloadBatchItem(item, exportFmt)
-                    }
-                    onDownloadAll={() =>
-                      downloadAllSeparate(batchProcessor.items, exportFmt)
-                    }
-                    onDownloadZip={() =>
-                      downloadAsZip(batchProcessor.items, exportFmt)
-                    }
-                  />
+                  <div className="space-y-3">
+                    {batchProcessor.rejectedCount > 0 && (
+                      <div className="rounded-xl border border-white/5 bg-slate-800/40 px-3 py-2 text-xs text-slate-400">
+                        Queue is capped at {MAX_BATCH_ITEMS} images —{" "}
+                        {batchProcessor.rejectedCount} file
+                        {batchProcessor.rejectedCount === 1
+                          ? " was"
+                          : "s were"}{" "}
+                        not added.
+                      </div>
+                    )}
+                    <BatchLayout
+                      items={batchProcessor.items}
+                      selectedItemId={selectedBatchItemId}
+                      onSelectItem={setSelectedBatchItemId}
+                      isProcessing={batchProcessor.isProcessing}
+                      completedCount={batchProcessor.completedCount}
+                      errorCount={batchProcessor.errorCount}
+                      settingsDirty={batchSettingsDirty}
+                      onRerun={handleBatchRerun}
+                      onAddFiles={(files) => {
+                        if (!batchSettingsDirty) {
+                          setBatchAppliedSettings(currentSettings);
+                        }
+                        void batchProcessor.addFiles(files, {
+                          autoStart: !batchSettingsDirty,
+                        });
+                      }}
+                      onRemoveItem={batchProcessor.removeItem}
+                      onClearAll={() => {
+                        batchProcessor.clearAll();
+                        setBatchMode(false);
+                        setSelectedBatchItemId(null);
+                        setBatchAppliedSettings(null);
+                      }}
+                      onStartProcessing={handleBatchStart}
+                      onStopProcessing={batchProcessor.stopProcessing}
+                      onDownloadItem={downloadBatchItem}
+                      onDownloadAll={() =>
+                        downloadAllSeparate(batchProcessor.items)
+                      }
+                      onDownloadZip={() => downloadAsZip(batchProcessor.items)}
+                    />
+                  </div>
                 ) : (
                   <>
                     <Dropzone
@@ -601,9 +659,13 @@ export default function App() {
                           <div className="text-xs text-slate-400">
                             {processing
                               ? "Processing…"
-                              : outputUrl
-                                ? "Drag handle to compare"
-                                : "Load an image to begin"}
+                              : hasError
+                                ? "Processing failed — retry with current settings"
+                                : settingsDirty
+                                  ? "Settings changed since this result"
+                                  : outputUrl
+                                    ? "Drag handle to compare"
+                                    : "Load an image to begin"}
                           </div>
                         </div>
                         <div className="flex items-center gap-2 text-xs">
@@ -628,13 +690,20 @@ export default function App() {
 
                           {/* Status chip with glow */}
                           <span
+                            title={
+                              processing ? processingStats.message : undefined
+                            }
                             className={clsx(
-                              "flex items-center gap-1.5 rounded-full px-2.5 py-1 border",
+                              "flex w-[6.5rem] items-center justify-center gap-1.5 rounded-full px-2.5 py-1 border",
                               processing
                                 ? "bg-amber-500/15 border-amber-500/30 text-amber-400"
-                                : outputUrl
-                                  ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-400 shadow-[0_0_10px_rgba(34,197,94,0.2)]"
-                                  : "bg-slate-800/90 border-slate-700/50 text-slate-400",
+                                : hasError
+                                  ? "bg-red-500/10 border-red-500/20 text-red-300"
+                                  : settingsDirty
+                                    ? "bg-slate-800/90 border-slate-700/50 text-slate-300"
+                                    : outputUrl
+                                      ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-400 shadow-[0_0_10px_rgba(34,197,94,0.2)]"
+                                      : "bg-slate-800/90 border-slate-700/50 text-slate-400",
                             )}
                           >
                             {/* Status indicator dot */}
@@ -642,8 +711,21 @@ export default function App() {
                               className={clsx(
                                 "h-1.5 w-1.5 rounded-full",
                                 processing && "bg-amber-400 animate-pulse",
-                                outputUrl && !processing && "bg-emerald-400",
-                                !outputUrl && !processing && "bg-slate-500",
+                                hasError && !processing && "bg-red-400",
+                                settingsDirty &&
+                                  !processing &&
+                                  !hasError &&
+                                  "bg-amber-300/80",
+                                outputUrl &&
+                                  !processing &&
+                                  !hasError &&
+                                  !settingsDirty &&
+                                  "bg-emerald-400",
+                                !outputUrl &&
+                                  !processing &&
+                                  !hasError &&
+                                  !settingsDirty &&
+                                  "bg-slate-500",
                               )}
                             />
                             {statusLabel}
@@ -656,15 +738,19 @@ export default function App() {
                           beforeUrl={inputUrl}
                           afterUrl={outputUrl}
                           processing={processing}
+                          outdated={settingsDirty}
+                          onRegenerate={reprocess}
                         />
                       </div>
 
                       <div className="mt-4">
                         <ActionButtons
                           outputUrl={outputUrl}
-                          exportFormat={exportFmt}
-                          canReprocess={!!cachedImage && !!outputUrl}
+                          exportFormat={outputFormat}
+                          canReprocess={!!cachedImage}
                           processing={processing}
+                          settingsDirty={settingsDirty}
+                          hasError={hasError}
                           onDownload={handleDownload}
                           onReprocess={reprocess}
                           onReset={reset}
@@ -694,6 +780,8 @@ export default function App() {
                   capabilities={capabilities}
                   device={device}
                   onDevice={setDevice}
+                  passes={passes}
+                  onPasses={handlePasses}
                 />
 
                 <input
@@ -704,10 +792,12 @@ export default function App() {
                   onChange={onBgImageChange}
                 />
 
-                <ProcessingPanel
-                  stats={processingStats}
-                  backendLabel={backendLabel}
-                />
+                {!batchMode && (
+                  <ProcessingPanel
+                    stats={processingStats}
+                    backendLabel={backendLabel}
+                  />
+                )}
 
                 {/* Mode toggle hint */}
                 {!batchMode && inputUrl && (

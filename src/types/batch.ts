@@ -13,6 +13,7 @@ export type BatchItem = {
   };
   result?: {
     outputUrl: string;
+    format: "png" | "webp";
     outputBytes: Uint8Array;
     timingMs: number;
     width: number;

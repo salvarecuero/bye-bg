@@ -14,9 +14,10 @@ body {
   min-height: 100vh;
 }
 
+/* No backdrop-filter: the page behind is a near-flat gradient, so the blur is
+   invisible but forces expensive re-composition on every repaint. */
 .glass {
-  backdrop-filter: blur(12px);
-  background: rgba(15, 23, 42, 0.6);
+  background: rgba(15, 23, 42, 0.72);
   border: 1px solid rgba(255, 255, 255, 0.08);
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
 }
@@ -144,12 +145,13 @@ body {
 }
 
 /* Loading stripes animation for processing state */
+/* Transform-only so it stays on the compositor; 28.28px = one stripe period (20px * √2) */
 @keyframes loading-stripes {
-  0% { background-position: 0 0; }
-  100% { background-position: 28px 0; }
+  from { transform: translateX(0); }
+  to { transform: translateX(28.28px); }
 }
 
-.animate-loading-stripes {
+.loading-stripes {
   background: repeating-linear-gradient(
     -45deg,
     transparent,
@@ -158,6 +160,13 @@ body {
     rgba(14, 165, 233, 0.08) 20px
   );
   animation: loading-stripes 0.8s linear infinite;
+  will-change: transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loading-stripes {
+    animation: none;
+  }
 }
 
 /* Scrollbar styling */

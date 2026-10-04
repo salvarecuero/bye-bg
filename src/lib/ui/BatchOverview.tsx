@@ -11,6 +11,8 @@ type Props = {
   onStopProcessing: () => void;
   onDownloadAll: () => void;
   onDownloadZip: () => void;
+  settingsDirty?: boolean;
+  onRerun: () => void;
 };
 
 export function BatchOverview({
@@ -23,6 +25,8 @@ export function BatchOverview({
   onStopProcessing,
   onDownloadAll,
   onDownloadZip,
+  settingsDirty = false,
+  onRerun
 }: Props) {
   const hasCompleted = completed > 0;
 
@@ -38,12 +42,7 @@ export function BatchOverview({
 
       {/* Progress bar */}
       <div className="w-full max-w-md mb-6">
-        <BatchProgressSummary
-          total={total}
-          completed={completed}
-          errors={errors}
-          isProcessing={isProcessing}
-        />
+        <BatchProgressSummary total={total} completed={completed} errors={errors} isProcessing={isProcessing} />
       </div>
 
       {/* Processing controls */}
@@ -93,9 +92,23 @@ export function BatchOverview({
         </div>
       )}
 
-      {/* Hint */}
-      <div className="mt-8 text-xs text-slate-500">
-        Select an image from the sidebar to preview before/after
+      {/* Hint slot — same height in both states so nothing jumps */}
+      <div className="mt-8 flex min-h-[28px] items-center gap-2 text-xs text-slate-500">
+        {settingsDirty ? (
+          <>
+            <span className="h-1.5 w-1.5 rounded-full bg-amber-300/80" />
+            <span className="text-slate-400">Results use previous settings</span>
+            <button
+              type="button"
+              onClick={onRerun}
+              className="rounded-full px-2 py-1 font-medium text-sky-300 transition-colors hover:bg-sky-400/10 hover:text-sky-200"
+            >
+              Re-run queue
+            </button>
+          </>
+        ) : (
+          'Select an image from the sidebar to preview before/after'
+        )}
       </div>
     </div>
   );

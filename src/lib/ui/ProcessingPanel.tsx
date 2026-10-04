@@ -110,12 +110,12 @@ export function ProcessingPanel({ stats, backendLabel }: Props) {
 
   const [expanded, setExpanded] = useState(false);
 
-  // Auto-expand when processing starts
+  // Auto-expand when processing starts or errors
   useEffect(() => {
-    if (isActive) {
+    if (isActive || hasError) {
       setExpanded(true);
     }
-  }, [isActive]);
+  }, [isActive, hasError]);
 
   return (
     <div
